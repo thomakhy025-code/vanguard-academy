@@ -280,12 +280,10 @@ func _build_towers() -> void:
 		var pane := _box_at(at + Vector3(0, 1.6, -3.0), Vector3(2.2, 1.1, 0.12), Game.tier_window(skill), 0.35, false)
 		pane.material_override = _shiny(Game.tier_window(skill), 0.45)
 		_sign(at + Vector3(0, 2.5, 1.2), Game.landing_name(i), 40)
-		_portal(at + Vector3(0, 0, 2.4), Game.place_name(room), room, at)
-		if i == 0 or i == 6:
-			_ramp_between(at + Vector3(-3.1, -at.y, 6.2), at + Vector3(-3.1, 0, 2.6))
+		var inward := -1.0 if at.x > 0.0 else 1.0
+		_portal(at + Vector3(inward * 1.6, 0, -2.2), Game.place_name(room), room, at)
 		if i < 5 or (i >= 6 and i < 10):
-			var nxt: Vector3 = Game.landing_at(i + 1)
-			_ramp_between(at + Vector3(3.1, 0, -2.2), nxt + Vector3(3.1, 0, 2.2))
+			_tower_stair(at, Game.landing_at(i + 1), i == 0 or i == 6)
 	_sphere(Game.landing_at(5) + Vector3(0, 3.2, 0), 2.2, Color("c5764b"), 0.0, 0.55)
 	_sphere(Game.landing_at(10) + Vector3(0, 3.2, 0), 2.2, Color("e2c56a"), 0.15, 0.55)
 	_portal(Game.landing_at(0) + Vector3(-3.0, 0, 0.4), "Classroom", Game.Place.CLASSROOM, Game.landing_at(0) + Vector3(-1.2, 0, 0))
@@ -329,17 +327,17 @@ func _build_outside() -> void:
 	_box_at(Vector3(-1.7, 2.5, -0.55), Vector3(0.85, 1.15, 0.12), Color("e2c56a"), 0.4, false)
 	_box_at(Vector3(1.7, 2.5, -0.55), Vector3(0.85, 1.15, 0.12), Color("e2c56a"), 0.4, false)
 	_sign(Vector3(0, 3.6, 2.4), "School", 56)
-	_prompt_door(Vector3(0, 0, 1.5), "Enter the school", Game.Place.YARD, Vector3(-16, 0.45, 5.0))
+	_prompt_door(Vector3(0, 0, 1.5), "Enter the school", Game.Place.YARD, Vector3(-16, 0.45, 16.5))
 	for i in 8:
 		var angle := TAU * float(i) / 8.0
 		_tree(Vector3(sin(angle) * 16.0, 0, 10.0 + cos(angle) * 8.0), 3.1)
 
 func _school_gate() -> void:
-	_box_at(Vector3(-19.2, 1.8, 8), Vector3(1.2, 3.6, 5.4), Color("efe6d4"), 0.0, true)
-	_box_at(Vector3(-12.8, 1.8, 8), Vector3(1.2, 3.6, 5.4), Color("efe6d4"), 0.0, true)
-	_box_at(Vector3(-16, 3.7, 8), Vector3(6.4, 0.7, 5.4), Color("c5764b"), 0.0, true)
-	_sign(Vector3(-16, 3.2, 11.2), "School door", 40)
-	_prompt_door(Vector3(-16, 0, 10.6), "Leave the school", Game.Place.OUTSIDE, Vector3(0, 0.45, 4.4))
+	_box_at(Vector3(-19.2, 1.8, 22), Vector3(1.2, 3.6, 5.4), Color("efe6d4"), 0.0, true)
+	_box_at(Vector3(-12.8, 1.8, 22), Vector3(1.2, 3.6, 5.4), Color("efe6d4"), 0.0, true)
+	_box_at(Vector3(-16, 3.7, 22), Vector3(6.4, 0.7, 5.4), Color("c5764b"), 0.0, true)
+	_sign(Vector3(-16, 3.2, 18.6), "School door", 40)
+	_prompt_door(Vector3(-16, 0, 18.8), "Leave the school", Game.Place.OUTSIDE, Vector3(0, 0.45, 4.4))
 
 func _prompt_door(at: Vector3, button: String, place_id: int, arrive_at: Vector3) -> void:
 	_box_at(at + Vector3(1.15, 1.35, 0), Vector3(0.4, 2.7, 0.4), Color("efe6d4"), 0.0, true)
@@ -366,21 +364,50 @@ func _portal(at: Vector3, label: String, place_id: int, back: Vector3) -> void:
 	mark.add_to_group("door")
 	stage.add_child(mark)
 
-func _ramp_between(a: Vector3, b: Vector3) -> void:
+func _tower_stair(lower: Vector3, upper: Vector3, from_ground: bool) -> void:
+	# A wide flight in front of the tower. It finishes level with the next floor, so the front edge is not a wall.
+	var outward := 1.0 if lower.x > 0.0 else -1.0
+	var foot := 0.0 if from_ground else lower.y
+	var far_z := lower.z + 18.0
+	var toe := Vector3(lower.x, foot, far_z)
+	var lip := Vector3(lower.x, upper.y, lower.z + 4.4)
+	var pad := Vector3(lower.x, upper.y, lower.z + 1.8)
+	if not from_ground:
+		var side_x := lower.x - outward * 6.8
+		var deck_z := far_z + 2.2
+		_flat_span(Vector3(lower.x - outward * 2.6, lower.y, lower.z + 2.2), Vector3(side_x, lower.y, lower.z + 5.2), 3.0)
+		_flat_span(Vector3(side_x, lower.y, lower.z + 5.2), Vector3(side_x, lower.y, deck_z), 3.0)
+		_flat_span(Vector3(side_x, lower.y, deck_z), Vector3(lower.x, lower.y, deck_z), 4.4)
+	_ramp_between(toe, lip, 8.0)
+	_ramp_between(lip, pad, 7.4)
+
+func _flat_span(a: Vector3, b: Vector3, width: float) -> void:
+	var delta := b - a
+	var span := Vector2(delta.x, delta.z).length()
+	if span < 0.2:
+		return
+	var yaw := atan2(delta.x, delta.z)
+	_box_at((a + b) * 0.5 + Vector3(0, -0.16, 0), Vector3(width, 0.32, span), Color("cbbe9e"), 0.0, true, yaw)
+
+func _ramp_between(a: Vector3, b: Vector3, width: float = 4.8) -> void:
 	var delta := b - a
 	var flat := Vector2(delta.x, delta.z).length()
 	if flat < 0.2:
 		return
-	var mid := (a + b) * 0.5
 	var yaw := atan2(delta.x, delta.z)
 	var pitch := atan2(delta.y, flat)
+	var basis := Basis.from_euler(Vector3(-pitch, yaw, 0.0))
+	var thickness := 0.42
+	var length := flat
+	# The slab runs from a to b. Nothing hangs past the high end into the walker.
+	var mid := b - basis.z * (length * 0.5) - basis.y * (thickness * 0.5)
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
 	body.collision_mask = 0
-	body.transform = Transform3D(Basis.from_euler(Vector3(-pitch, yaw, 0.0)), mid)
+	body.transform = Transform3D(basis, mid)
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(2.2, 0.28, flat + 0.6)
+	box.size = Vector3(width, thickness, length)
 	shape.shape = box
 	body.add_child(shape)
 	var mesh := MeshInstance3D.new()
@@ -389,6 +416,16 @@ func _ramp_between(a: Vector3, b: Vector3) -> void:
 	mesh.mesh = slab
 	mesh.material_override = _mat(Color("cbbe9e"), 0.0)
 	body.add_child(mesh)
+	var tread_count := int(flat / 0.62)
+	for i in tread_count:
+		var tread := MeshInstance3D.new()
+		var tread_mesh := BoxMesh.new()
+		tread_mesh.size = Vector3(width * 0.94, 0.045, 0.2)
+		tread.mesh = tread_mesh
+		var along := length * 0.5 - flat + (float(i) + 0.5) * flat / float(tread_count)
+		tread.position = Vector3(0, thickness * 0.5 + 0.02, along)
+		tread.material_override = _mat(Color("efe6d4"), 0.0)
+		body.add_child(tread)
 	stage.add_child(body)
 
 func _tree(at: Vector3, height: float) -> void:

@@ -41,7 +41,7 @@ func setup(follow_camera: Camera3D, is_local: bool) -> void:
 	add_to_group("player")
 	collision_layer = 2
 	collision_mask = 1
-	floor_snap_length = 0.3
+	floor_snap_length = 0.45
 	floor_max_angle = deg_to_rad(50.0)
 	_build_body()
 	if is_local:

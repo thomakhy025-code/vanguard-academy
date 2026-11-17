@@ -27,6 +27,7 @@ var story_body: Label
 var story_back: Button
 var story_next: Button
 var story_begin: Button
+var story_board: Control
 var story_index := 0
 var pan_pointer := -2
 var pan_touch := false
@@ -836,6 +837,9 @@ func _open_story() -> void:
 	story_title = _story_label(Color("e2c56a"))
 	story_title.text = "Vanguard Academy"
 	story_body = _story_label(Color("f7f1e4"))
+	story_board = StoryBoard.new()
+	story_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	story_plate.add_child(story_board)
 	story_plate.add_child(story_page)
 	story_plate.add_child(story_title)
 	story_plate.add_child(story_body)
@@ -881,6 +885,9 @@ func _show_story_page() -> void:
 	story_index = clampi(story_index, 0, last)
 	story_body.text = SCHOOL_STORY[story_index]
 	story_page.text = "%d / %d" % [story_index + 1, SCHOOL_STORY.size()]
+	if story_board is StoryBoard:
+		story_board.page = story_index
+		story_board.t = 0.0
 	story_back.visible = story_index > 0
 	story_next.visible = story_index < last
 	story_begin.visible = story_index == last
@@ -951,11 +958,16 @@ func _layout_story() -> void:
 	story_plate.position = Vector2(left, top)
 	story_plate.size = Vector2(plate_w, plate_h)
 	var inner := 28.0
-	story_page.position = Vector2(inner, 20)
+	var stage_h := clampf(plate_h * 0.38, minf(110.0, plate_h * 0.34), 230.0)
+	if story_board:
+		story_board.position = Vector2(inner, 16)
+		story_board.size = Vector2(maxf(40.0, plate_w - inner * 2.0), stage_h)
+	var text_top := 16.0 + stage_h + 10.0
+	story_page.position = Vector2(inner, text_top)
 	story_page.size = Vector2(plate_w - inner * 2.0, font + 16)
 	story_page.add_theme_font_size_override("font_size", maxi(26, font - 4))
 	story_title.position = Vector2(inner, story_page.position.y + story_page.size.y + 6.0)
-	story_title.size = Vector2(plate_w - inner * 2.0, title_font * 2.2)
+	story_title.size = Vector2(plate_w - inner * 2.0, title_font * 1.35)
 	story_title.add_theme_font_size_override("font_size", title_font)
 	var body_top := story_title.position.y + story_title.size.y + 8.0
 	story_body.position = Vector2(inner, body_top)
@@ -974,3 +986,106 @@ func _layout_story() -> void:
 		shown[0].size = Vector2(half, btn_h)
 		shown[1].position = Vector2(left + half + gap, y)
 		shown[1].size = Vector2(half, btn_h)
+
+class StoryBoard extends Control:
+	var page := 0
+	var t := 0.0
+
+	func _process(delta: float) -> void:
+		t += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		var s := size
+		if s.x < 8.0 or s.y < 8.0:
+			return
+		draw_rect(Rect2(Vector2.ZERO, s), Color("24343b"))
+		match page:
+			0:
+				_bell(s)
+			1:
+				_desks(s)
+			2:
+				_split(s)
+			3:
+				_book(s)
+			_:
+				_gate(s)
+
+	func _bell(s: Vector2) -> void:
+		var sway := sin(t * 0.8) * 0.05
+		draw_set_transform(Vector2(s.x * 0.28, s.y * 0.62), sway, Vector2.ONE)
+		draw_rect(Rect2(-18, -70, 36, 18), Color("e2c56a"))
+		draw_colored_polygon(PackedVector2Array([Vector2(-34, -52), Vector2(34, -52), Vector2(22, 8), Vector2(-22, 8)]), Color("efe6d4"))
+		draw_circle(Vector2(0, 16), 6, Color("e2c56a"))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var cut := sin(t * 2.4) * 0.7
+		var hilt := Vector2(s.x * 0.68, s.y * 0.72)
+		draw_set_transform(hilt, cut, Vector2.ONE)
+		draw_rect(Rect2(-7, -78, 14, 78), Color("e2c56a"))
+		draw_rect(Rect2(-16, -8, 32, 8), Color("c5764b"))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var spark := hilt + Vector2(sin(cut), -cos(cut)) * 62.0
+		draw_circle(spark, 11.0 + sin(t * 7.0) * 2.0, Color("8ec8f0"))
+
+	func _desks(s: Vector2) -> void:
+		var phase := fmod(t, 3.4) / 3.4
+		var left := Vector2(s.x * 0.28, s.y * 0.62)
+		var right := Vector2(s.x * 0.72, s.y * 0.62)
+		draw_rect(Rect2(left + Vector2(-46, -8), Vector2(92, 18)), Color("c5764b"))
+		draw_rect(Rect2(left + Vector2(-34, -36), Vector2(68, 28)), Color("efe6d4"))
+		draw_rect(Rect2(right + Vector2(-46, -8), Vector2(92, 18)), Color("8ec8f0"))
+		draw_rect(Rect2(right + Vector2(-34, -36), Vector2(68, 28)), Color("efe6d4"))
+		var sweep := clampf(phase / 0.45, 0.0, 1.0)
+		draw_set_transform(left + Vector2(0, -20), lerpf(0.8, -0.9, sweep), Vector2.ONE)
+		draw_rect(Rect2(-6, -48, 12, 52), Color("e2c56a"))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var pulse := 8.0 + sin(t * 6.0) * 3.0
+		draw_circle(right + Vector2(0, -48), pulse, Color("8ec8f0"))
+		if phase > 0.55:
+			var meet := smoothstep(0.55, 0.85, phase)
+			var mid := s * 0.5
+			draw_circle(mid.lerp(left + Vector2(0, -48), 1.0 - meet), 8, Color("e2c56a"))
+			draw_circle(mid.lerp(right + Vector2(0, -48), 1.0 - meet), 8, Color("8ec8f0"))
+
+	func _split(s: Vector2) -> void:
+		var apart := sin(fmod(t, 4.2) / 4.2 * TAU) * 0.5 + 0.5
+		var gap := apart * s.x * 0.26
+		var mid := Vector2(s.x * 0.5, s.y * 0.58)
+		draw_rect(Rect2(mid + Vector2(-70, 8), Vector2(140, 16)), Color("2e4048"))
+		draw_rect(Rect2(mid + Vector2(-gap - 7, -70), Vector2(14, 64)), Color("e2c56a"))
+		draw_circle(mid + Vector2(gap, -36), 12, Color("8ec8f0"))
+		draw_line(mid + Vector2(-gap, -36), mid + Vector2(gap, -36), Color("e2c56a"), 3.0)
+
+	func _book(s: Vector2) -> void:
+		var phase := fmod(t, 3.6) / 3.6
+		var opened := smoothstep(0.12, 0.42, phase)
+		var hinge := Vector2(s.x * 0.5, s.y * 0.58)
+		draw_set_transform(hinge, opened * -0.85, Vector2.ONE)
+		draw_rect(Rect2(-78, -48, 78, 96), Color("efe6d4"))
+		draw_set_transform(hinge, opened * 0.85, Vector2.ONE)
+		draw_rect(Rect2(0, -48, 78, 96), Color("f7f1e4"))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		draw_rect(Rect2(hinge + Vector2(-6, -50), Vector2(12, 100)), Color("c5764b"))
+		var hop := 0.0
+		if phase > 0.48 and phase < 0.82:
+			hop = sin((phase - 0.48) / 0.34 * PI) * 42.0
+		draw_circle(hinge + Vector2(0, -58 - hop), 10, Color("e2c56a"))
+		draw_circle(hinge + Vector2(8, -64 - hop), 4, Color("8ec8f0"))
+
+	func _gate(s: Vector2) -> void:
+		var phase := fmod(t, 3.2) / 3.2
+		var lift := smoothstep(0.15, 0.7, phase)
+		for i in 4:
+			var step := Rect2(s.x * 0.12, s.y * 0.72 - float(i) * 22.0, s.x * 0.34, 16)
+			draw_rect(step, Color("efe6d4"))
+		var you := Vector2(s.x * 0.18, s.y * 0.68)
+		var mira := you + Vector2(18, lerpf(0.0, -44.0, lift))
+		var font := ThemeDB.fallback_font
+		draw_string(font, you, "You", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("2e4048"))
+		draw_string(font, mira, "Mira", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("2e4048"))
+		var gate := Vector2(s.x * 0.72, s.y * 0.58)
+		draw_rect(Rect2(gate + Vector2(-34, -48), Vector2(12, 96)), Color("efe6d4"))
+		draw_rect(Rect2(gate + Vector2(22, -48), Vector2(12, 96)), Color("efe6d4"))
+		draw_rect(Rect2(gate + Vector2(-34, -8), Vector2(68, 10)), Color("c5764b"))
+		draw_rect(Rect2(Vector2(s.x * 0.58, s.y * 0.78), Vector2(s.x * 0.3, 10)), Color("57af70"))
