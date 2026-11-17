@@ -1,0 +1,33 @@
+; Engine configuration file.
+; Vanguard Academy — Godot 4 project.
+
+config_version=5
+
+[application]
+
+config/name="Vanguard Academy"
+config/description="Free hunt grounds. Sword and spell together."
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7", "Forward Plus")
+config/icon="res://icon.svg"
+
+[autoload]
+
+Game="*res://scripts/game.gd"
+Online="*res://scripts/online.gd"
+Music="*res://scripts/music.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/resizable=true
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=6
+
+[rendering]
+
+anti_aliasing/quality/msaa_3d=2
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=2
+environment/defaults/default_clear_color=Color(0.522, 0.757, 0.878, 1)

@@ -1,0 +1,23 @@
+.godot/
+*.translation
+
+# Unity files left in this folder are not the game.
+Assets/
+Packages/
+ProjectSettings/
+Library/
+Logs/
+Temp/
+obj/
+Build/
+UserSettings/
+MemoryCaptures/
+unity-create.log
+*.csproj
+*.sln
+.vs/
+
+export/
+.DS_Store
+Thumbs.db
+godot-check.log
