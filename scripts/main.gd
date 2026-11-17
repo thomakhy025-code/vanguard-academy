@@ -7,6 +7,7 @@ var stage: Node3D
 var fx: Node3D
 var camera: Camera3D
 var environment: Environment
+var sun: DirectionalLight3D
 var student
 var hall_running := false
 var hall_time := 0.0
@@ -47,7 +48,7 @@ func _world() -> void:
 	var world := WorldEnvironment.new()
 	world.environment = environment
 	add_child(world)
-	var sun := DirectionalLight3D.new()
+	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-48, 32, 0)
 	sun.light_color = Color("fff4e0")
 	sun.light_energy = 1.15
@@ -84,8 +85,18 @@ func _spark_wipe() -> void:
 	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
 	layer.add_child(veil)
+	var title := Label.new()
+	title.text = Game.place_name(Game.place)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title.set_anchors_preset(Control.PRESET_FULL_RECT)
+	title.add_theme_font_size_override("font_size", 64)
+	title.add_theme_color_override("font_color", Color("2e4048"))
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(title)
 	var fade := create_tween()
-	fade.tween_property(veil, "modulate:a", 0.0, 0.32)
+	fade.tween_property(veil, "modulate:a", 0.0, 0.42)
+	fade.parallel().tween_property(title, "modulate:a", 0.0, 0.42)
 	fade.finished.connect(layer.queue_free)
 
 func _process(delta: float) -> void:
@@ -107,47 +118,21 @@ func rebuild(id: int) -> void:
 	_tint(id)
 	match id:
 		Game.Place.YARD:
-			_ground(Color("7ec48a"), 46.0)
-			_scatter_blobs(Color("8ed39a"), 10, 8.0, 18.0, 0.7)
-			_forge()
-			_tower(Vector3(0, 0, -16))
-			_spawn_foe(FoeScript.Kind.DUMMY, Vector3(0, 1, -3))
+			_build_yard()
 		Game.Place.GARDEN:
-			_ground(Color("57af70"), 58.0)
-			_scatter_blobs(Color("3f9a62"), 16, 6.0, 24.0, 0.55)
-			_wall_ring(Color("cbbe9e"), 22.0)
-			_ore_nodes(6, 14.0)
-			_pack(FoeScript.Kind.BEAST, 4, 10.0)
+			_build_garden()
 		Game.Place.UNDERCROFT:
-			_ground(Color("6d7c88"), 36.0)
-			environment.background_color = Color("6f8ea3")
-			environment.fog_density = 0.02
-			_arches()
-			_pack(FoeScript.Kind.ELITE, 3, 8.0)
-			_ore_nodes(4, 9.0)
+			_build_undercroft()
 		Game.Place.WASTES:
-			_ground(Color("d2a15a"), 90.0)
-			environment.background_color = Color("f0b27a")
-			_scatter_blobs(Color("c5764b"), 12, 12.0, 34.0, 0.4)
-			_pack(FoeScript.Kind.BEAST, 5, 14.0)
-			_spawn_foe(FoeScript.Kind.BOSS, Vector3(0, 1, -18))
+			_build_wastes()
 		Game.Place.COURT:
-			_ground(Color("8d6a45"), 34.0)
-			_ring(Vector3(-5, 0.08, 0), Color("d5dbe0"), 4.2)
-			_ring(Vector3(5, 0.08, 0), Color("e2c56a"), 4.2)
-			environment.background_color = Color("6e5848")
+			_build_court()
 		Game.Place.HALL:
-			_ground(Color("b7aa96"), 32.0)
-			_stair()
-			_plaque()
+			_build_hall()
 		Game.Place.CLASSROOM:
-			_ground(Color("f0e2c4"), 30.0)
-			_desk(Vector3(0, 0, -6))
-			_board(Vector3(0, 2.2, -10))
+			_build_classroom()
 		Game.Place.LIBRARY:
-			_ground(Color("c8b48a"), 32.0)
-			_shelves()
-			_glow_book(Vector3(0, 1.1, -4))
+			_build_library()
 	if student:
 		student.global_position = Vector3(0, 2.4, 8)
 		student.velocity = Vector3.ZERO
@@ -156,10 +141,188 @@ func rebuild(id: int) -> void:
 
 func _tint(id: int) -> void:
 	environment.background_color = Color("85c1e0")
+	environment.ambient_light_color = Color("fff3dd")
+	environment.ambient_light_energy = 0.72
 	environment.fog_density = 0.008
 	environment.fog_light_color = Color("d5eef8")
-	if id == Game.Place.WASTES:
-		environment.fog_light_color = Color("f6d7b0")
+	if sun:
+		sun.light_color = Color("fff4e0")
+		sun.light_energy = 1.15
+		sun.rotation_degrees = Vector3(-48, 32, 0)
+	match id:
+		Game.Place.UNDERCROFT:
+			environment.background_color = Color("6f8ea3")
+			environment.fog_density = 0.02
+			environment.fog_light_color = Color("b7c9d4")
+			environment.ambient_light_energy = 0.55
+		Game.Place.WASTES:
+			environment.background_color = Color("f0b27a")
+			environment.fog_light_color = Color("f6d7b0")
+			environment.fog_density = 0.006
+			if sun:
+				sun.light_color = Color("ffd0a0")
+				sun.light_energy = 1.05
+				sun.rotation_degrees = Vector3(-28, 18, 0)
+		Game.Place.COURT:
+			environment.background_color = Color("6e5848")
+			environment.fog_density = 0.012
+			environment.ambient_light_energy = 0.5
+			if sun:
+				sun.light_energy = 0.7
+				sun.light_color = Color("f0d2a4")
+		Game.Place.HALL:
+			environment.background_color = Color("cbbfa8")
+			environment.fog_density = 0.01
+		Game.Place.LIBRARY:
+			environment.background_color = Color("e7d3a8")
+			environment.ambient_light_color = Color("ffe6c4")
+		Game.Place.CLASSROOM:
+			environment.background_color = Color("d5eef8")
+
+func _build_yard() -> void:
+	_ground(Color("7ec48a"), 48.0)
+	_tiles(3, 2.15, Color("efe6d4"))
+	_lawn(Vector3(-11, 0.15, 9))
+	_lawn(Vector3(12, 0.15, 10))
+	_lawn(Vector3(-15, 0.15, -1))
+	_lawn(Vector3(15, 0.15, 1))
+	_lawn(Vector3(6, 0.15, -14))
+	_house(Vector3(-16, 0, 9))
+	_house(Vector3(15, 0, 11))
+	_house(Vector3(-15, 0, -13))
+	_banner(Vector3(-13, 0, 6), Color("c5764b"))
+	_banner(Vector3(13, 0, 7), Color("2e4048"))
+	_banner(Vector3(-11, 0, -10), Color("e2c56a"))
+	_banner(Vector3(11, 0, -4), Color("cbbe9e"))
+	var bell := _tower(Vector3(-9, 0, -16))
+	_forge()
+	_crystal(Vector3(0, 0, -7.5))
+	_door(Vector3(-13, 0, -2), "Wild Garden", Game.Place.GARDEN)
+	_door(Vector3(13, 0, -2), "Undercroft", Game.Place.UNDERCROFT)
+	_door(Vector3(0, 0, -13), "Training Wastes", Game.Place.WASTES)
+	_door(Vector3(-13, 0, 6), "Dueling Court", Game.Place.COURT)
+	_door(Vector3(13, 0, 6), "Proving Hall", Game.Place.HALL)
+	_door(Vector3(-7, 0, 14), "Classroom", Game.Place.CLASSROOM)
+	_door(Vector3(7, 0, 14), "Library", Game.Place.LIBRARY)
+	_east_gate(Vector3(18, 0, -8))
+	_spawn_foe(FoeScript.Kind.DUMMY, Vector3(2.2, 1, -3.2))
+	_spawn_foe(FoeScript.Kind.SPIRIT, Vector3(8.5, 1, 5))
+	_spawn_foe(FoeScript.Kind.SPIRIT, Vector3(-8.5, 1, 4.5))
+	_spawn_foe(FoeScript.Kind.SPIRIT, Vector3(7, 1, -9))
+	_person(Vector3(-3.2, 0, -9.5), Color("8d5a3c"), "Captain Ross to the %s\nThe vote keeps sword and spell together." % Game.address())
+	_person(Vector3(4.2, 0, -4.6), Color("3e5f86"), "Yard herald to the %s\n%s" % [Game.address(), Game.herald_line()])
+	_ring_if_needed(bell)
+
+func _build_garden() -> void:
+	Game.begin_circuit()
+	_ground(Color("57af70"), 58.0)
+	_walls(24.0, Color("cbbe9e"), 1.8)
+	for spot in [Vector3(-8, 0.4, -6), Vector3(6, 0.5, -10), Vector3(-4, 0.3, 2), Vector3(10, 0.35, 4), Vector3(-12, 0.45, 6), Vector3(3, 0.4, -16)]:
+		_sphere(spot, 2.2, Color("3f9a62"), 0.0, 0.55)
+	for bush in [Vector3(-5, 0.4, -4), Vector3(4, 0.35, 1), Vector3(-9, 0.3, -12), Vector3(8, 0.4, -8), Vector3(2, 0.3, 6)]:
+		_sphere(bush, 0.7, Color("3f9a62"), 0.0, 0.8)
+	_path(11.0)
+	for i in 8:
+		var angle := TAU * float(i) / 8.0 + 0.35
+		_circuit_post(i, Vector3(sin(angle) * 14.0, 0, cos(angle) * 14.0))
+	for i in 6:
+		var angle := TAU * float(i) / 6.0 + 1.2
+		_pickup(Vector3(sin(angle) * 16.0, 0, cos(angle) * 16.0), "ore", 1, Color("e2c56a"), 0.35)
+	_pickup(Vector3(-6, 0, -14), "shard", 1, Color("d7f1ff"), 0.55)
+	_pickup(Vector3(7, 0, -15), "shard", 1, Color("d7f1ff"), 0.55)
+	_sign(Vector3(0, 2.2, 4), "Garden circuit", 48)
+	_spawn_foe(FoeScript.Kind.BEAST, Vector3(-3, 1, -9))
+	_spawn_foe(FoeScript.Kind.BEAST, Vector3(3.5, 1, -10))
+	_spawn_foe(FoeScript.Kind.BEAST, Vector3(0, 1, -14))
+	_spawn_foe(FoeScript.Kind.BEAST, Vector3(-6, 1, -13))
+
+func _build_undercroft() -> void:
+	_ground(Color("7d8b96"), 30.0)
+	_walls(16.0, Color("8aa0ad"), 3.2)
+	for i in 4:
+		var x := -6.0 + i * 4.0
+		_arch(Vector3(x, 0, -10))
+		_lamp(Vector3(x, 2.8, -8.2), Color("ffd2a0"), 1.1, 5.0)
+		_sphere(Vector3(x, 2.7, -8.4), 0.16, Color("ffd2a0"), 0.9, 1.0)
+	_crack(Vector3(-2, 0.08, -4))
+	_crack(Vector3(3, 0.08, -8))
+	_crack(Vector3(0.5, 0.08, -2))
+	for i in 4:
+		var angle := PI + TAU * float(i) / 4.0
+		_pickup(Vector3(sin(angle) * 8.0, 0, cos(angle) * 8.0), "ore", 2, Color("e2c56a"), 0.4)
+		_pickup(Vector3(sin(angle + 0.4) * 6.0, 0, cos(angle + 0.4) * 6.0), "shard", 1, Color("d7f1ff"), 0.6)
+	_spawn_foe(FoeScript.Kind.ELITE, Vector3(-5, 1, -7))
+	_spawn_foe(FoeScript.Kind.ELITE, Vector3(5, 1, -7))
+	_spawn_foe(FoeScript.Kind.ELITE, Vector3(0, 1, -12))
+	_sign(Vector3(0, 2.4, -1), "Old vault", 42)
+
+func _build_wastes() -> void:
+	_ground(Color("d2a15a"), 90.0)
+	_stone_ring(14.0, 18, Color("efe6d4"))
+	_stone_ring(24.0, 24, Color("e2c56a"))
+	_stone_ring(36.0, 28, Color("c5764b"))
+	_sign(Vector3(0, 1.8, -12), "Inner ring", 48)
+	_sign(Vector3(0, 1.8, -22), "Rank 3 ring", 48)
+	_sign(Vector3(0, 2.0, -34), "Rank 6 ring", 48)
+	_shrine(Vector3(-16, 0, -18))
+	_shrine(Vector3(18, 0, -28))
+	_shrine(Vector3(-6, 0, -34))
+	_camp(Vector3(9, 0, -10), FoeScript.Kind.BEAST, 3, 1.0)
+	_camp(Vector3(-14, 0, -20), FoeScript.Kind.ELITE, 2, 1.25)
+	_camp(Vector3(12, 0, -32), FoeScript.Kind.ELITE, 2, 1.6)
+	_spawn_foe(FoeScript.Kind.BOSS, Vector3(0, 1, -18), 1.0)
+	for blob in [Vector3(-20, 0.2, -8), Vector3(22, 0.2, -14), Vector3(-18, 0.2, -30), Vector3(8, 0.2, 6)]:
+		_sphere(blob, 1.6, Color("c5764b"), 0.0, 0.4)
+
+func _build_court() -> void:
+	_ground(Color("8d6a45"), 36.0)
+	_walls(14.0, Color("6b422c"), 3.4)
+	_tiles(2, 2.4, Color("a87848"))
+	_duel_ring(Vector3(-5, 0, 0), Color("d5dbe0"), 4.2, "even", "Even")
+	_duel_ring(Vector3(5, 0, 0), Color("e2c56a"), 4.2, "open", "Open")
+	var gem := _sphere(Vector3(0, 5.4, -1), 0.55, Color("d7f1ff"), 1.1, 1.2)
+	gem.material_override = _shiny(Color("d7f1ff"), 1.2)
+	_lamp(Vector3(0, 5.2, -1), Color("fff6dd"), 1.6, 10.0)
+	for i in 8:
+		var angle := PI * 0.45 + PI * 1.1 * float(i) / 7.0
+		var pos := Vector3(sin(angle) * 11.0, 0, cos(angle) * 11.0)
+		var cloth := Color("3e5f86") if i % 2 == 0 else Color("8d5a3c")
+		_person(pos, cloth, "")
+	_sign(Vector3(0, 2.6, 3.5), "Choose a ring", 48)
+
+func _build_hall() -> void:
+	_ground(Color("b7aa96"), 34.0)
+	_walls(15.0, Color("efe6d4"), 4.2)
+	_stair()
+	_shaft(Vector3(0, 6.2, -5))
+	_course_plaque(Vector3(5.2, 1.3, -3.2), 0)
+	_course_plaque(Vector3(5.2, 1.7, -6.4), 1)
+	_course_plaque(Vector3(5.2, 2.1, -9.6), 2)
+	_sign(Vector3(0, 3.4, -2), "Crest\n%s" % Game.rival_line("hall", Game.hall_course), 40)
+
+func _build_classroom() -> void:
+	_ground(Color("f0e2c4"), 32.0)
+	_walls(14.0, Color("efe6d4"), 3.6)
+	_window(Vector3(-6, 2.0, -12.5))
+	_window(Vector3(0, 2.0, -12.5))
+	_window(Vector3(6, 2.0, -12.5))
+	_lesson_board(Vector3(0, 1.8, -11.2))
+	_desk(Vector3(-3.4, 0, -2.5), "Soldier desk", "soldier")
+	_desk(Vector3(3.4, 0, -2.5), "Caster desk", "caster")
+	_person(Vector3(-5.5, 0, -7), Color("4d6a8a"), "Professor Hen to the %s\nBoth desks. Both arts." % Game.address())
+
+func _build_library() -> void:
+	_ground(Color("c8b48a"), 34.0)
+	_walls(15.0, Color("6b422c"), 3.8)
+	for i in 5:
+		_box_at(Vector3(-8 + i * 3.6, 1.7, -11), Vector3(2.4, 3.3, 0.7), Color("6b422c"), 0.0, true)
+		_lamp(Vector3(-8 + i * 3.6, 2.6, -9.6), Color("ffd2a0"), 0.7, 3.5)
+	_box_at(Vector3(0, 0.7, -4.2), Vector3(2.8, 0.9, 1.3), Color("8d5a3c"), 0.0, true)
+	_person(Vector3(2.4, 0, -3.2), Color("6b422c"), "Archivist Quill to the %s\nA book opens after its stamp." % Game.address())
+	var titles := ["Sparrow", "Needle", "Hammer", "Lantern", "Answer", "Night Ink"]
+	var ids := ["sparrow", "needle", "hammer", "lantern", "answer", "ink"]
+	for i in ids.size():
+		_tome(Vector3(-4.2 + i * 1.7, 1.15, -8.6), ids[i], titles[i])
 
 func start_court(mode: String) -> void:
 	if Online.active:
@@ -167,17 +330,31 @@ func start_court(mode: String) -> void:
 		return
 	Game.court_mode = mode
 	Game.travel(Game.Place.COURT)
+	if Game.place != Game.Place.COURT:
+		return
+	Game.court_live = true
+	Game.changed.emit()
 	_spawn_foe(FoeScript.Kind.DUELIST, Vector3(0, 1, -4))
 
-func start_hall() -> void:
+func start_hall(course: int = 0) -> void:
+	course = clampi(course, 0, 2)
 	Game.travel(Game.Place.HALL)
-	for i in 3:
-		var foe = _spawn_foe(FoeScript.Kind.CONSTRUCT, Vector3(-4.5 + i * 4.5, 1, -6))
+	if Game.place != Game.Place.HALL:
+		return
+	Game.hall_course = course
+	Game.note_attempt(course)
+	var counts: Array[int] = [3, 3, 4]
+	var count: int = counts[course]
+	for i in count:
+		var x := 0.0
+		if count > 1:
+			x = lerpf(-6.0, 6.0, float(i) / float(count - 1))
+		var foe = _spawn_foe(FoeScript.Kind.CONSTRUCT, Vector3(x, 1, -6.5))
 		foe.died.connect(_on_construct_died)
 	hall_token += 1
 	hall_time = 0.0
 	hall_running = true
-	Game.toast.emit("Course started. Drop all three constructs.")
+	Game.toast.emit("%s. Clear every construct. Only a faster run replaces the best." % Game.HALL_TITLES[course])
 
 func host_match(mode: String) -> void:
 	Game.court_mode = mode
@@ -185,6 +362,10 @@ func host_match(mode: String) -> void:
 		return
 	_rename_local()
 	Game.travel(Game.Place.COURT)
+	if Game.place != Game.Place.COURT:
+		return
+	Game.court_live = true
+	Game.changed.emit()
 	Game.toast.emit("Waiting at the court. IP: %s  port %d. If Windows Firewall asks, allow it." % [Online.local_ips(), Online.PORT])
 
 func join_match(ip: String, mode: String) -> void:
@@ -204,6 +385,8 @@ func _rename_local() -> void:
 func leave_online() -> void:
 	_clear_remotes()
 	Online.stop()
+	Game.court_live = false
+	Game.changed.emit()
 	Game.toast.emit("You left the online court.")
 
 func _on_peer_joined(id: int) -> void:
@@ -229,8 +412,7 @@ func _claim_local_authority() -> void:
 	_rename_local()
 
 func _find_player(id: int) -> Node:
-	var named := get_node_or_null("Peer%d" % id)
-	return named
+	return get_node_or_null("Peer%d" % id)
 
 func _clear_remotes() -> void:
 	for node in get_tree().get_nodes_in_group("player"):
@@ -246,10 +428,10 @@ func _on_construct_died(_foe) -> void:
 	hall_running = false
 	Game.note_hall(hall_time)
 
-func _spawn_foe(kind: FoeScript.Kind, at: Vector3):
+func _spawn_foe(kind: FoeScript.Kind, at: Vector3, tough := 1.0):
 	var foe = FoeScript.new()
 	stage.add_child(foe)
-	foe.setup(kind, at)
+	foe.setup(kind, at, tough)
 	foe.died.connect(_on_foe_died)
 	return foe
 
@@ -259,27 +441,40 @@ func _on_foe_died(foe) -> void:
 		return
 	if foe.kind == FoeScript.Kind.DUMMY or foe.kind == FoeScript.Kind.CONSTRUCT:
 		return
-	var amount := 2
-	if foe.kind == FoeScript.Kind.ELITE:
-		amount = 4
-	elif foe.kind == FoeScript.Kind.BOSS:
-		amount = 8
-	Game.grant_ore(amount, true)
-	var kind = foe.kind
-	var at: Vector3 = foe.home
-	var here: int = Game.place
-	_respawn(kind, at, here)
+	var ore_n := 2
+	var shard_n := 0
+	match foe.kind:
+		FoeScript.Kind.SPIRIT:
+			ore_n = 1
+		FoeScript.Kind.BEAST:
+			ore_n = 2
+		FoeScript.Kind.ELITE:
+			ore_n = 4
+			shard_n = 1
+		FoeScript.Kind.BOSS:
+			ore_n = 8
+			shard_n = 3
+	Game.grant_loot(ore_n, shard_n)
+	_respawn(foe.kind, foe.home, Game.place, foe.tough)
 
-func _respawn(kind, at: Vector3, here: int) -> void:
+func _respawn(kind, at: Vector3, here: int, tough: float) -> void:
 	await get_tree().create_timer(5.0).timeout
 	if Game.place != here:
 		return
-	_spawn_foe(kind, at)
+	_spawn_foe(kind, at, tough)
 
-func _pack(kind, count: int, radius: float) -> void:
-	for i in count:
-		var angle := TAU * float(i) / float(count)
-		_spawn_foe(kind, Vector3(sin(angle) * radius, 1, -6.0 + cos(angle) * radius * 0.65))
+func _ring_if_needed(bell: MeshInstance3D) -> void:
+	if not Game.bell_pending or bell == null:
+		return
+	Game.bell_pending = false
+	Game.bell_rung_once = true
+	Game.toast.emit("The bell rings for the %s." % Game.address())
+	Game.changed.emit()
+	Game._save()
+	var tw := create_tween()
+	tw.tween_property(bell, "scale", Vector3(1.45, 1.45, 1.45), 0.16)
+	tw.tween_property(bell, "scale", Vector3.ONE, 0.24)
+	bell.tree_exiting.connect(tw.kill)
 
 func _ground(color: Color, radius: float) -> void:
 	var body := StaticBody3D.new()
@@ -303,187 +498,325 @@ func _ground(color: Color, radius: float) -> void:
 	body.add_child(mesh)
 	stage.add_child(body)
 
-func _scatter_blobs(color: Color, count: int, inner: float, outer: float, flat: float) -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 1408 + Game.place
+func _tiles(half: int, cell: float, color: Color) -> void:
+	for x in range(-half, half + 1):
+		for z in range(-half, half + 1):
+			_box_at(Vector3(x * cell, 0.06, z * cell), Vector3(cell * 0.9, 0.1, cell * 0.9), color, 0.0, false)
+
+func _lawn(at: Vector3) -> void:
+	_sphere(at, 2.6, Color("57af70"), 0.0, 0.22)
+
+func _walls(radius: float, color: Color, height: float) -> void:
+	var count := 12
 	for i in count:
-		var angle := rng.randf() * TAU
-		var dist := rng.randf_range(inner, outer)
-		var radius := rng.randf_range(0.8, 1.8)
-		var mesh := MeshInstance3D.new()
-		var ball := SphereMesh.new()
-		ball.radius = radius
-		ball.height = radius * 2.0 * flat
-		mesh.mesh = ball
-		mesh.position = Vector3(sin(angle) * dist, radius * flat * 0.35, cos(angle) * dist)
-		mesh.material_override = _mat(color, 0.0)
-		stage.add_child(mesh)
-
-func _forge() -> void:
-	_block(Vector3(-6, 0.7, -2), Vector3(2.4, 1.4, 1.4), Color("4d4038"), true)
-	var mouth := MeshInstance3D.new()
-	var glow := BoxMesh.new()
-	glow.size = Vector3(1.1, 0.7, 0.3)
-	mouth.mesh = glow
-	mouth.position = Vector3(-6, 0.9, -1.2)
-	mouth.material_override = _mat(Color("ffb15a"), 1.6)
-	stage.add_child(mouth)
-	var light := OmniLight3D.new()
-	light.position = Vector3(-6, 1.6, -1.0)
-	light.light_color = Color("ffb15a")
-	light.light_energy = 2.0
-	light.omni_range = 8.0
-	light.shadow_enabled = false
-	stage.add_child(light)
-	for i in 4:
-		_block(Vector3(-3.2, 0.7, -1.2 + i * 0.7), Vector3(0.12, 1.3, 0.12), Color("d4a054"), false)
-
-func _tower(at: Vector3) -> void:
-	_block(at + Vector3(0, 3.2, 0), Vector3(2.2, 6.4, 2.2), Color("efe6d4"), true)
-	var cap := MeshInstance3D.new()
-	var dome := SphereMesh.new()
-	dome.radius = 1.5
-	dome.height = 2.0
-	cap.mesh = dome
-	cap.position = at + Vector3(0, 6.8, 0)
-	cap.material_override = _mat(Color("c5764b"), 0.0)
-	stage.add_child(cap)
-	var bell := MeshInstance3D.new()
-	var bell_mesh := SphereMesh.new()
-	bell_mesh.radius = 0.28
-	bell_mesh.height = 0.4
-	bell.mesh = bell_mesh
-	bell.position = at + Vector3(0, 4.6, 1.15)
-	bell.material_override = _mat(Color("f0d78c"), 0.4)
-	stage.add_child(bell)
-
-func _wall_ring(color: Color, radius: float) -> void:
-	for i in 10:
-		var angle := TAU * float(i) / 10.0
-		if absf(angle - PI * 0.5) < 0.4:
+		var angle := TAU * float(i) / float(count)
+		if absf(angle) < 0.62 or absf(angle - TAU) < 0.62:
 			continue
-		var pos := Vector3(sin(angle) * radius, 1.1, cos(angle) * radius)
-		_block(pos, Vector3(3.2, 2.2, 0.8), color, true)
+		var pos := Vector3(sin(angle) * radius, height * 0.5, cos(angle) * radius)
+		_box_at(pos, Vector3(radius * 0.62, height, 0.7), color, 0.0, true, angle)
 
-func _arches() -> void:
-	for i in 4:
-		_block(Vector3(-6 + i * 4, 1.6, -8), Vector3(0.7, 3.2, 0.7), Color("d9d3c7"), true)
-		var lamp := OmniLight3D.new()
-		lamp.position = Vector3(-6 + i * 4, 2.8, -6)
-		lamp.light_color = Color("ffd2a0")
-		lamp.light_energy = 1.1
-		lamp.omni_range = 5.0
-		lamp.shadow_enabled = false
-		stage.add_child(lamp)
-
-func _ring(at: Vector3, color: Color, radius: float) -> void:
-	var mesh := MeshInstance3D.new()
-	var torus := TorusMesh.new()
-	torus.inner_radius = radius
-	torus.outer_radius = radius + 0.28
-	mesh.mesh = torus
-	mesh.position = at
-	mesh.material_override = _mat(color, 0.15)
-	stage.add_child(mesh)
-
-func _stair() -> void:
-	for i in 5:
-		_block(Vector3(0, 0.25 + i * 0.15, -2.0 - i * 1.5), Vector3(6.0 - i * 0.4, 0.35, 1.3), Color("efe6d4"), true)
-
-func _plaque() -> void:
-	var label := Label3D.new()
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.font_size = 56
-	label.modulate = Color("2e4048")
-	label.position = Vector3(0, 3.2, -8)
-	if Game.best_hall_time < 0.0:
-		label.text = "The stair is waiting"
-	else:
-		label.text = "Best  %.1fs" % Game.best_hall_time
-	stage.add_child(label)
-	var shaft := OmniLight3D.new()
-	shaft.position = Vector3(0, 6, -4)
-	shaft.light_color = Color("fff6dd")
-	shaft.light_energy = 1.4
-	shaft.omni_range = 10.0
-	shaft.shadow_enabled = false
-	stage.add_child(shaft)
-
-func _desk(at: Vector3) -> void:
-	_block(at + Vector3(0, 0.7, 0), Vector3(3.2, 0.3, 1.2), Color("8d5a3c"), true)
-	_block(at + Vector3(0, 0.35, 0), Vector3(0.3, 0.7, 0.8), Color("6b422c"), true)
-
-func _board(at: Vector3) -> void:
-	_block(at, Vector3(4.5, 2.2, 0.2), Color("24343b"), true)
-	var mark := Label3D.new()
-	mark.text = "Cut  +  Spark"
-	mark.font_size = 64
-	mark.position = at + Vector3(0, 0, 0.2)
-	mark.modulate = Color("f4efe4")
-	stage.add_child(mark)
-
-func _shelves() -> void:
-	for i in 5:
-		_block(Vector3(-8 + i * 3.2, 1.6, -9), Vector3(2.2, 3.2, 0.6), Color("6b422c"), true)
-
-func _glow_book(at: Vector3) -> void:
-	var mesh := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(0.7, 0.2, 0.9)
-	mesh.mesh = box
-	mesh.position = at
-	mesh.material_override = _mat(Color("f0d78c"), 1.2)
-	stage.add_child(mesh)
-	var light := OmniLight3D.new()
-	light.position = at + Vector3(0, 0.4, 0)
-	light.light_color = Color("f0d78c")
-	light.light_energy = 1.5
-	light.omni_range = 4.0
-	light.shadow_enabled = false
-	stage.add_child(light)
-
-func _ore_nodes(count: int, radius: float) -> void:
-	for i in count:
-		var angle := TAU * float(i) / float(count) + 0.4
-		var mesh := MeshInstance3D.new()
-		var rock := SphereMesh.new()
-		rock.radius = 0.28
-		rock.height = 0.4
-		mesh.mesh = rock
-		mesh.position = Vector3(sin(angle) * radius, 0.35, cos(angle) * radius)
-		mesh.material_override = _mat(Color("e2c56a"), 0.35)
-		mesh.add_to_group("ore")
-		stage.add_child(mesh)
-
-func _block(at: Vector3, box_size: Vector3, color: Color, solid: bool) -> void:
-	var mesh := MeshInstance3D.new()
+func _box_at(at: Vector3, box_size: Vector3, color: Color, glow: float = 0.0, solid: bool = false, yaw: float = 0.0) -> MeshInstance3D:
 	var box := BoxMesh.new()
 	box.size = box_size
-	mesh.mesh = box
-	mesh.position = at
-	mesh.material_override = _mat(color, 0.0)
+	var inst := MeshInstance3D.new()
+	inst.mesh = box
+	inst.material_override = _mat(color, glow)
 	if solid:
 		var body := StaticBody3D.new()
 		body.collision_layer = 1
 		body.collision_mask = 0
 		body.position = at
-		var shape := CollisionShape3D.new()
-		var box_shape := BoxShape3D.new()
-		box_shape.size = box_size
-		shape.shape = box_shape
-		body.add_child(shape)
-		mesh.position = Vector3.ZERO
-		body.add_child(mesh)
+		body.rotation.y = yaw
+		var shape_node := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = box_size
+		shape_node.shape = shape
+		body.add_child(shape_node)
+		body.add_child(inst)
 		stage.add_child(body)
 	else:
-		stage.add_child(mesh)
+		inst.position = at
+		inst.rotation.y = yaw
+		stage.add_child(inst)
+	return inst
 
-func _mat(color: Color, glow: float) -> StandardMaterial3D:
+func _sphere(at: Vector3, radius: float, color: Color, glow: float, squash: float) -> MeshInstance3D:
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius * 2.0 * squash
+	var inst := MeshInstance3D.new()
+	inst.mesh = mesh
+	inst.position = at
+	inst.material_override = _shiny(color, glow) if glow > 0.25 else _mat(color, glow)
+	stage.add_child(inst)
+	return inst
+
+func _cylinder_mesh(at: Vector3, top: float, bottom: float, height: float, color: Color, glow: float) -> MeshInstance3D:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = top
+	mesh.bottom_radius = bottom
+	mesh.height = height
+	var inst := MeshInstance3D.new()
+	inst.mesh = mesh
+	inst.position = at
+	inst.material_override = _shiny(color, glow)
+	stage.add_child(inst)
+	return inst
+
+func _house(at: Vector3) -> void:
+	_box_at(at + Vector3(0, 1.15, 0), Vector3(3.4, 2.3, 2.8), Color("efe6d4"), 0.0, true)
+	_sphere(at + Vector3(0, 2.55, 0), 1.8, Color("c5764b"), 0.0, 0.62)
+	_box_at(at + Vector3(0, 0.9, 1.45), Vector3(0.7, 1.2, 0.16), Color("2e4048"), 0.0, false)
+
+func _banner(at: Vector3, color: Color) -> void:
+	_box_at(at + Vector3(0, 1.7, 0), Vector3(0.12, 3.4, 0.12), Color("2e4048"), 0.0, false)
+	_box_at(at + Vector3(0.5, 2.7, 0), Vector3(1.0, 0.7, 0.08), color, 0.0, false)
+
+func _tower(at: Vector3) -> MeshInstance3D:
+	_box_at(at + Vector3(0, 3.2, 0), Vector3(2.4, 6.4, 2.4), Color("efe6d4"), 0.0, true)
+	_sphere(at + Vector3(0, 6.9, 0), 1.55, Color("c5764b"), 0.0, 0.85)
+	var bell := _cylinder_mesh(at + Vector3(0, 4.6, 1.3), 0.28, 0.36, 0.5, Color("f0d78c"), 0.55)
+	_sign(at + Vector3(0, 5.6, 1.6), Game.bell_caption(), 36)
+	return bell
+
+func _forge() -> void:
+	_box_at(Vector3(-7.2, 0.85, -1.2), Vector3(3.0, 1.7, 1.7), Color("4a4038"), 0.0, true)
+	_box_at(Vector3(-7.2, 2.0, -1.2), Vector3(1.3, 0.9, 1.3), Color("3a332c"), 0.0, false)
+	_sphere(Vector3(-7.2, 2.7, -1.2), 0.48, Color("2e4048"), 0.0, 1.0)
+	var mouth := _box_at(Vector3(-7.2, 0.95, -0.25), Vector3(1.3, 0.75, 0.28), Color("ffb15a"), 0.0, false)
+	mouth.material_override = _shiny(Color("ffb15a"), 2.2)
+	_lamp(Vector3(-7.2, 1.5, 0.2), Color("ffb15a"), 2.0, 8.0)
+	_box_at(Vector3(-4.8, 0.5, 0.2), Vector3(1.1, 0.7, 0.7), Color("5c5148"), 0.0, true)
+	_box_at(Vector3(-7.2, 0.55, 2.0), Vector3(3.4, 0.8, 0.4), Color("cbbe9e"), 0.0, true)
+	for i in 4:
+		_cylinder_mesh(Vector3(-8.4 + i * 0.75, 1.35, 2.0), 0.045, 0.07, 1.15, Color("e2c56a"), 0.4)
+	_mark(Vector3(-5.4, 0, 1.5), "forge", "to", 0)
+	_sign(Vector3(-5.6, 2.2, 1.5), "Forge bench", 40)
+
+func _crystal(at: Vector3) -> void:
+	_box_at(at + Vector3(0, 0.5, 0), Vector3(1.3, 1.0, 1.3), Color("cbbe9e"), 0.0, true)
+	var gem := _sphere(at + Vector3(0, 1.75, 0), 0.55, Color("d7f1ff"), 0.2, 1.25)
+	gem.material_override = _shiny(Color("d7f1ff"), 1.3)
+	_lamp(at + Vector3(0, 2.2, 0), Color("d7f1ff"), 1.4, 6.0)
+	_sign(at + Vector3(0, 2.9, 0), Game.exhibit_line(), 36)
+
+func _door(at: Vector3, label: String, place_id: int) -> void:
+	_box_at(at + Vector3(1.6, 1.5, 0), Vector3(0.55, 3.0, 0.55), Color("efe6d4"), 0.0, true)
+	_box_at(at + Vector3(-1.6, 1.5, 0), Vector3(0.55, 3.0, 0.55), Color("efe6d4"), 0.0, true)
+	_sphere(at + Vector3(0, 3.2, 0), 1.15, Color("c5764b"), 0.0, 0.55)
+	_sign(at + Vector3(0, 2.2, 0), label, 40)
+	_mark(at, "door", "to", place_id)
+
+func _east_gate(at: Vector3) -> void:
+	_box_at(at + Vector3(0, 1.8, 0), Vector3(0.4, 3.6, 0.4), Color("2e4048"), 0.0, true)
+	_box_at(at + Vector3(2.4, 1.8, 0), Vector3(0.4, 3.6, 0.4), Color("2e4048"), 0.0, true)
+	_box_at(at + Vector3(1.2, 3.45, 0), Vector3(2.8, 0.4, 0.45), Color("2e4048"), 0.0, true)
+	for i in 4:
+		_box_at(at + Vector3(0.45 + i * 0.5, 1.7, 0), Vector3(0.14, 2.8, 0.16), Color("3a4a52"), 0.0, true)
+	_sphere(at + Vector3(2.8, 2.7, 0.35), 0.2, Color("f0d78c"), 0.2, 1.0)
+	_lamp(at + Vector3(2.8, 2.7, 0.35), Color("f0d78c"), 1.3, 5.5)
+	_cloud(at + Vector3(1.2, 1.3, -1.6))
+	_cloud(at + Vector3(2.2, 1.6, -2.2))
+	_sign(at + Vector3(-0.4, 2.4, 0.4), "East Gate is closed today.", 36)
+	_mark(at + Vector3(-2.4, 0, 0), "door", "to", Game.Place.GATE)
+
+func _arch(at: Vector3) -> void:
+	_box_at(at + Vector3(-0.9, 1.4, 0), Vector3(0.5, 2.8, 0.5), Color("d9d3c7"), 0.0, true)
+	_box_at(at + Vector3(0.9, 1.4, 0), Vector3(0.5, 2.8, 0.5), Color("d9d3c7"), 0.0, true)
+	_sphere(at + Vector3(0, 2.9, 0), 1.05, Color("d9d3c7"), 0.0, 0.6)
+
+func _crack(at: Vector3) -> void:
+	_box_at(at, Vector3(1.5, 0.05, 0.16), Color("e2c56a"), 0.85, false)
+
+func _shrine(at: Vector3) -> void:
+	_box_at(at + Vector3(0, 0.4, 0), Vector3(2.4, 0.8, 2.2), Color("cbbe9e"), 0.0, true)
+	_box_at(at + Vector3(-0.55, 1.6, 0), Vector3(0.42, 2.3, 0.42), Color("efe6d4"), 0.0, false)
+	_box_at(at + Vector3(0.55, 1.05, 0), Vector3(0.42, 1.3, 0.42), Color("efe6d4"), 0.0, false)
+	_sphere(at + Vector3(0, 0.95, 0.8), 0.28, Color("e2c56a"), 0.7, 1.0)
+
+func _camp(at: Vector3, kind, count: int, tough: float) -> void:
+	_sphere(at + Vector3(0, 0.85, 0), 1.35, Color("c5764b"), 0.0, 0.55)
+	_box_at(at + Vector3(0, 0.25, 0), Vector3(2.6, 0.35, 2.6), Color("cbbe9e"), 0.0, false)
+	_banner(at + Vector3(1.8, 0, 0), Color("e2c56a"))
+	for i in count:
+		var angle := TAU * float(i) / float(count)
+		_spawn_foe(kind, at + Vector3(sin(angle) * 2.6, 1.0, cos(angle) * 2.6), tough)
+
+func _stone_ring(radius: float, count: int, color: Color) -> void:
+	for i in count:
+		var angle := TAU * float(i) / float(count)
+		_sphere(Vector3(sin(angle) * radius, 0.18, cos(angle) * radius), 0.32, color, 0.0, 0.45)
+
+func _path(radius: float) -> void:
+	for i in 18:
+		var angle := TAU * float(i) / 18.0
+		_box_at(Vector3(sin(angle) * radius, 0.07, cos(angle) * radius), Vector3(1.35, 0.1, 1.35), Color("efe6d4"), 0.0, false)
+
+func _duel_ring(at: Vector3, color: Color, radius: float, mode: String, label: String) -> void:
+	var mesh := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = radius
+	torus.outer_radius = radius + 0.28
+	mesh.mesh = torus
+	mesh.position = at + Vector3(0, 0.08, 0)
+	mesh.material_override = _shiny(color, 0.3)
+	stage.add_child(mesh)
+	_sign(at + Vector3(0, 1.5, 0), label, 52)
+	_mark(at, "duel", "mode", mode)
+
+func _stair() -> void:
+	for i in 6:
+		_box_at(Vector3(0, 0.28 + i * 0.18, -1.5 - i * 1.35), Vector3(6.2 - i * 0.3, 0.36, 1.25), Color("efe6d4"), 0.0, true)
+
+func _shaft(at: Vector3) -> void:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 0.7
+	mesh.bottom_radius = 1.5
+	mesh.height = 8.0
+	var inst := MeshInstance3D.new()
+	inst.mesh = mesh
+	inst.position = at
+	var material := _mat(Color("fff6dd"), 0.45, 0.22)
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	inst.material_override = material
+	stage.add_child(inst)
+	_lamp(at, Color("fff6dd"), 1.5, 12.0)
+
+func _course_plaque(at: Vector3, course: int) -> void:
+	_box_at(at, Vector3(2.0, 1.2, 0.2), Color("2e4048"), 0.0, false)
+	_box_at(at + Vector3(0, 0, 0.1), Vector3(1.55, 0.82, 0.08), Color("f0d78c"), 0.75, false)
+	_sign(at + Vector3(0, 1.15, 0.2), "%s\n%s" % [Game.HALL_TITLES[course], Game.hall_line(course)], 28)
+	_mark(at + Vector3(0, 0, 1.2), "course", "course", course)
+
+func _window(at: Vector3) -> void:
+	_box_at(at, Vector3(1.6, 1.2, 0.1), Color("d7f1ff"), 0.35, false)
+
+func _lesson_board(at: Vector3) -> void:
+	_box_at(at, Vector3(4.8, 2.5, 0.2), Color("24343b"), 0.0, true)
+	_box_at(at + Vector3(-0.9, 0.05, 0.18), Vector3(0.12, 1.0, 0.06), Color("f4efe4"), 0.2, false)
+	_sphere(at + Vector3(0.9, 0.05, 0.24), 0.32, Color("9fd6ff"), 0.8, 1.0)
+	_sign(at + Vector3(0, 1.55, 0.2), "Cut  +  Spark", 48)
+
+func _desk(at: Vector3, label: String, bias: String) -> void:
+	_box_at(at + Vector3(0, 0.72, 0), Vector3(2.4, 0.28, 1.15), Color("8d5a3c"), 0.0, true)
+	_box_at(at + Vector3(0, 0.34, 0), Vector3(0.28, 0.68, 0.7), Color("6b422c"), 0.0, true)
+	_sign(at + Vector3(0, 1.4, 0), label, 40)
+	_mark(at + Vector3(0, 0, 1.35), "desk", "bias", bias)
+
+func _tome(at: Vector3, id: String, title: String) -> void:
+	var open := Game.book_ready(id)
+	var color := Color("f0d78c") if open else Color("6b422c")
+	var glow := 1.15 if open else 0.0
+	_box_at(at, Vector3(0.46, 0.72, 0.18), color, glow, false)
+	_sign(at + Vector3(0, 0.75, 0), title, 28)
+	_mark(at, "book", "book", id)
+	if open:
+		_lamp(at + Vector3(0, 0.4, 0.5), Color("f0d78c"), 0.7, 2.6)
+
+func _circuit_post(index: int, at: Vector3) -> void:
+	var root := Node3D.new()
+	root.position = at
+	root.set_meta("index", index)
+	root.add_to_group("circuit")
+	stage.add_child(root)
+	var pole := BoxMesh.new()
+	pole.size = Vector3(0.16, 0.7, 0.16)
+	var post := MeshInstance3D.new()
+	post.mesh = pole
+	post.position = Vector3(0, 0.35, 0)
+	post.material_override = _mat(Color("efe6d4"), 0.0)
+	root.add_child(post)
+	var gem := SphereMesh.new()
+	gem.radius = 0.26
+	gem.height = 0.46
+	var inst := MeshInstance3D.new()
+	inst.mesh = gem
+	inst.position = Vector3(0, 0.78, 0)
+	inst.material_override = _shiny(Color("e2c56a"), 0.7)
+	root.add_child(inst)
+
+func _pickup(at: Vector3, group: String, amount: int, color: Color, glow: float) -> void:
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.3
+	mesh.height = 0.42
+	var inst := MeshInstance3D.new()
+	inst.mesh = mesh
+	inst.position = at + Vector3(0, 0.28, 0)
+	inst.material_override = _shiny(color, glow)
+	inst.add_to_group(group)
+	inst.set_meta("amount", amount)
+	stage.add_child(inst)
+
+func _person(at: Vector3, tunic: Color, lines: String) -> void:
+	_sphere(at + Vector3(0, 0.4, 0), 0.34, tunic, 0.0, 1.0)
+	var body := CapsuleMesh.new()
+	body.radius = 0.28
+	body.height = 0.72
+	var inst := MeshInstance3D.new()
+	inst.mesh = body
+	inst.position = at + Vector3(0, 0.92, 0)
+	inst.material_override = _mat(tunic, 0.0)
+	stage.add_child(inst)
+	_sphere(at + Vector3(0, 1.42, 0), 0.28, Color("f0c7a4"), 0.0, 1.0)
+	_sphere(at + Vector3(0, 1.6, 0), 0.2, Color("2e4048"), 0.0, 0.7)
+	if lines != "":
+		_sign(at + Vector3(0, 2.2, 0), lines, 36)
+
+func _sign(at: Vector3, text: String, size: int) -> void:
+	var label := Label3D.new()
+	label.text = text
+	label.font_size = size
+	label.position = at
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.modulate = Color("2e4048")
+	label.outline_modulate = Color("f7f1e4")
+	label.outline_size = 8
+	label.no_depth_test = true
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stage.add_child(label)
+
+func _mark(at: Vector3, group: String, key: String, value) -> void:
+	var mark := Marker3D.new()
+	mark.position = at
+	mark.set_meta(key, value)
+	mark.add_to_group(group)
+	stage.add_child(mark)
+
+func _lamp(at: Vector3, color: Color, energy: float, radius: float) -> void:
+	var light := OmniLight3D.new()
+	light.position = at
+	light.light_color = color
+	light.light_energy = energy
+	light.omni_range = radius
+	light.shadow_enabled = false
+	stage.add_child(light)
+
+func _cloud(at: Vector3) -> void:
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.95
+	mesh.height = 1.4
+	var inst := MeshInstance3D.new()
+	inst.mesh = mesh
+	inst.position = at
+	inst.material_override = _mat(Color("9ec3d6"), 0.25, 0.38)
+	stage.add_child(inst)
+
+func _mat(color: Color, glow: float = 0.0, alpha: float = 1.0) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = 0.86
+	var tint := color
+	if alpha < 0.999:
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		tint.a = alpha
+	material.albedo_color = tint
+	material.roughness = 0.84
 	if glow > 0.0:
 		material.emission_enabled = true
 		material.emission = color
 		material.emission_energy_multiplier = glow
+	return material
+
+func _shiny(color: Color, glow: float) -> StandardMaterial3D:
+	var material := _mat(color, glow)
+	material.metallic = 0.62
+	material.roughness = 0.32
 	return material

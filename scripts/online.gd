@@ -90,4 +90,6 @@ func share_mode(match_mode: String) -> void:
 	mode = match_mode
 	Game.court_mode = match_mode
 	Game.travel(Game.Place.COURT)
+	Game.court_live = true
+	Game.changed.emit()
 	Game.toast.emit("Online %s match." % ("Open" if match_mode == "open" else "Even"))
