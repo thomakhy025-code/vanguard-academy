@@ -18,6 +18,7 @@ unity-create.log
 .vs/
 
 export/
+docs/*.import
 .DS_Store
 Thumbs.db
 godot-check.log

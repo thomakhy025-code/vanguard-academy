@@ -18,9 +18,29 @@ var banner_back: ColorRect
 var hp_fill: ColorRect
 var sheet: Control
 var join_field: LineEdit
+var story_layer: CanvasLayer
+var story: Control
+var story_plate: Panel
+var story_page: Label
+var story_title: Label
+var story_body: Label
+var story_back: Button
+var story_next: Button
+var story_begin: Button
+var story_index := 0
+var pan_pointer := -2
+var pan_touch := false
+
+const SCHOOL_STORY: Array[String] = [
+	"The First Bell is silent.\nYou enter Vanguard Academy already holding a sword and a spark.\nHere, the two are one art.",
+	"Professor Hen teaches from two desks in one room.\nThe lesson is cut, guard, spark, and the moment they meet.\nThat stamp is Spellcut and Guardcast.",
+	"Captain Ross at the Iron Desk wants the school to split sword and magic.\nThe vote is still coming.",
+	"Archivist Quill keeps new books shut until today's lesson is stamped.\nThe Wooden Sparrow is the first book, and it teaches Hop Cut.",
+	"Mira Vale's name is on the stair just above yours.\nThe grounds are open.\nEast Gate is closed today.",
+]
 
 func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	joystick = Control.new()
 	joystick.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -86,6 +106,7 @@ func _ready() -> void:
 		Game.boot_lines.clear()
 	_refresh()
 	call_deferred("_layout")
+	_open_story()
 
 func _student_call(method_name: String) -> void:
 	var student := _local_student()
@@ -127,16 +148,19 @@ func _box(fill: Color, edge: Color) -> StyleBoxFlat:
 	return style
 
 func _margins() -> Vector4:
+	return _view_margins(size)
+
+func _view_margins(view: Vector2) -> Vector4:
 	var edge := 22.0
 	var home := 30.0
 	var window := DisplayServer.window_get_size()
-	if window.x < 40 or window.y < 40 or size.x < 40.0 or size.y < 40.0:
+	if window.x < 40 or window.y < 40 or view.x < 40.0 or view.y < 40.0:
 		return Vector4(edge, edge, edge, home)
 	var safe := DisplayServer.get_display_safe_area()
 	if safe.size.x < 32 or safe.size.y < 32:
 		return Vector4(edge, edge, edge, home)
-	var sx := size.x / float(window.x)
-	var sy := size.y / float(window.y)
+	var sx := view.x / float(window.x)
+	var sy := view.y / float(window.y)
 	var left := maxf(edge, float(safe.position.x) * sx)
 	var top := maxf(edge, float(safe.position.y) * sy)
 	var right := maxf(edge, float(window.x - safe.position.x - safe.size.x) * sx)
@@ -196,6 +220,7 @@ func _layout() -> void:
 	if sheet and is_instance_valid(sheet) and not sheet.get_meta("sliding", false):
 		sheet.position = Vector2(16, 16)
 		sheet.size = view - Vector2(32, 32)
+	_layout_story()
 
 func _paint_hp() -> void:
 	var student := _local_student()
@@ -227,10 +252,16 @@ func _refresh() -> void:
 	banner_back.visible = banner != ""
 
 func _action_label() -> String:
+	if Game.is_trial(Game.place):
+		var pattern := 0
+		var host := get_tree().current_scene
+		if host != null and "trial_pattern" in host:
+			pattern = int(host.trial_pattern)
+		return "Begin · %s" % Game.pattern_label(Game.place, pattern)
 	match Game.place:
-		Game.Place.GARDEN: return "Garden circuit"
+		Game.Place.GARDEN: return "Forest circuit"
 		Game.Place.UNDERCROFT: return "Shards and ore"
-		Game.Place.WASTES: return "Hunt rings"
+		Game.Place.WASTES: return "Deep Wood rings"
 		Game.Place.CLASSROOM: return "Today's lesson"
 		Game.Place.LIBRARY: return "Open a book"
 		Game.Place.HALL: return "Start a course"
@@ -249,6 +280,7 @@ func _open_rank() -> void:
 		_show_toast("The forge bench is in the Yard.")
 		return
 	var notes: Array = [
+		"Four strikes on the glowing anvil, in time. A broken rhythm spends nothing.",
 		"Hunt rank raises the blade against monsters. Ribbons do not.",
 		Game.exhibit_line().replace("\n", " · "),
 		"Cost: %d ore and %d shards. You have %d ore and %d shards." % [Game.ore_cost(), Game.shard_cost(), Game.ore, Game.shards],
@@ -262,21 +294,26 @@ func _open_rank() -> void:
 	_open_sheet("Forge bench", rows, notes)
 
 func _upgrade() -> void:
-	if Game.try_upgrade():
-		_close_sheet()
+	Game.arm_anvil()
+	_close_sheet()
 
 func _equip(id: String) -> void:
 	Game.equip(id)
 	_close_sheet()
 
 func _open_action() -> void:
+	if Game.is_trial(Game.place):
+		var host := get_tree().current_scene
+		if host != null and host.has_method("begin_shown_trial"):
+			host.begin_shown_trial()
+		return
 	match Game.place:
 		Game.Place.GARDEN:
-			_open_sheet("Wild Garden", [], [Game.circuit_line(), "Packs and ore share the path. A short visit can finish the stones and leave."])
+			_open_sheet("School Forest", [], [Game.circuit_line(), "Packs and ore share the path. A short visit can finish the stones and leave."])
 		Game.Place.UNDERCROFT:
 			_open_sheet("Undercroft", [], ["Elites drop shards. The nodes here are richer. The bench spends ore and shards. Hunt rank is what the beasts feel."])
 		Game.Place.WASTES:
-			_open_sheet("Training Wastes", [], ["Inner ring: any hunt rank. Middle ring: made for rank 3. Outer ring and the Wastes Warden: made for rank 6. You can walk every ring. The field does not close."])
+			_open_sheet("Deep Wood", [], ["Inner ring: any hunt rank. Middle ring: made for rank 3. Outer ring and the Warden: made for rank 6. You can walk every ring. The wood does not close."])
 		Game.Place.CLASSROOM:
 			_open_lesson()
 		Game.Place.LIBRARY:
@@ -434,6 +471,8 @@ func _open_places() -> void:
 	_close_sheet()
 	sheet = _sheet_root("Places")
 	var box := _sheet_box(sheet)
+	for i in Game.landing_count():
+		_add_landing_card(box, i)
 	for id in [
 		Game.Place.YARD, Game.Place.GARDEN, Game.Place.UNDERCROFT, Game.Place.WASTES,
 		Game.Place.COURT, Game.Place.HALL, Game.Place.CLASSROOM, Game.Place.LIBRARY, Game.Place.GATE,
@@ -485,8 +524,33 @@ func _add_place_card(box: VBoxContainer, id: int) -> void:
 	button.add_child(ground)
 	box.add_child(button)
 
+func _add_landing_card(box: VBoxContainer, index: int) -> void:
+	var button := Button.new()
+	button.text = "%s\nWalk this landing. The trial is through the door." % Game.landing_name(index)
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.focus_mode = Control.FOCUS_NONE
+	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	button.custom_minimum_size = Vector2(0, 110)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.add_theme_font_size_override("font_size", 26)
+	button.add_theme_color_override("font_color", Color("f7f1e4"))
+	var edge := Game.tier_window(String(Game.LANDING_SKILLS[index]))
+	var fill := Color("2e4048")
+	button.add_theme_stylebox_override("normal", _box(fill, edge))
+	button.add_theme_stylebox_override("hover", _box(fill.lightened(0.08), edge))
+	button.add_theme_stylebox_override("pressed", _box(fill.darkened(0.08), edge))
+	button.pressed.connect(_go_landing.bind(index))
+	box.add_child(button)
+
+func _go_landing(index: int) -> void:
+	Game.go_landing(index)
+	_close_sheet()
+
 func _go_place(id: int) -> void:
-	Game.travel(id)
+	if id == Game.Place.YARD:
+		Game.travel(id)
+	else:
+		Game.open_door(id, Game.door_back(id))
 	_close_sheet()
 
 func _open_yearbook() -> void:
@@ -497,7 +561,7 @@ func _open_yearbook() -> void:
 		Game.looks_line(),
 		Game.season_line(),
 		"Chapters do not close the fields.",
-		"Garden circuits finished: %d." % Game.circuit_clears,
+		"Forest circuits finished: %d." % Game.circuit_clears,
 	]
 	if Game.spirit_line != "":
 		notes.append(Game.spirit_line)
@@ -555,6 +619,7 @@ func _sheet_root(title: String) -> Panel:
 			panel.set_meta("sliding", false)
 	)
 	panel.tree_exiting.connect(slide.kill)
+	panel.gui_input.connect(_keep_press)
 	return panel
 
 func _sheet_box(panel: Panel) -> VBoxContainer:
@@ -632,6 +697,7 @@ func _draw_stick() -> void:
 
 func _stick_input(event: InputEvent) -> void:
 	var radius := minf(joystick.size.x, joystick.size.y) * 0.5 - 6.0
+	var pointer := event is InputEventMouseButton or event is InputEventMouseMotion or event is InputEventScreenTouch or event is InputEventScreenDrag
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			dragging = true
@@ -649,6 +715,8 @@ func _stick_input(event: InputEvent) -> void:
 			_release_stick()
 	elif event is InputEventScreenDrag and event.index == finger:
 		_move_knob(event.position, radius)
+	if pointer:
+		accept_event()
 
 func _move_knob(point: Vector2, radius: float) -> void:
 	var delta := point - joystick.size * 0.5
@@ -664,3 +732,237 @@ func _release_stick() -> void:
 	knob = Vector2.ZERO
 	Game.stick = Vector2.ZERO
 	joystick.queue_redraw()
+
+func _gui_input(event: InputEvent) -> void:
+	if _pan_blocked():
+		_end_pan()
+		return
+	if event is InputEventScreenTouch:
+		_pan_touch(event)
+	elif event is InputEventScreenDrag:
+		_pan_drag(event)
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		_pan_click(event)
+	elif event is InputEventMouseMotion:
+		_pan_move(event)
+
+func _pan_blocked() -> bool:
+	if Game.opening:
+		return true
+	return sheet != null and is_instance_valid(sheet)
+
+func _end_pan() -> void:
+	pan_pointer = -2
+	pan_touch = false
+
+func _pan_touch(event: InputEventScreenTouch) -> void:
+	if event.pressed:
+		if pan_pointer == -2:
+			pan_touch = true
+			pan_pointer = event.index
+	elif event.index == pan_pointer:
+		_end_pan()
+	accept_event()
+
+func _pan_drag(event: InputEventScreenDrag) -> void:
+	if event.index != pan_pointer:
+		return
+	_pan_by(event.relative)
+	accept_event()
+
+func _pan_click(event: InputEventMouseButton) -> void:
+	if pan_touch:
+		if not event.pressed:
+			_end_pan()
+		accept_event()
+		return
+	if event.pressed:
+		pan_pointer = -1
+	elif pan_pointer == -1:
+		pan_pointer = -2
+	accept_event()
+
+func _pan_move(event: InputEventMouseMotion) -> void:
+	if pan_touch or pan_pointer != -1:
+		return
+	_pan_by(event.relative)
+	accept_event()
+
+func _pan_by(screen_delta: Vector2) -> void:
+	var world := get_parent()
+	if world:
+		world = world.get_parent()
+	if world and world.has_method("pan_camera"):
+		world.pan_camera(screen_delta)
+
+func _keep_press(event: InputEvent) -> void:
+	if event is InputEventMouseButton or event is InputEventMouseMotion or event is InputEventScreenTouch or event is InputEventScreenDrag:
+		accept_event()
+
+func _open_story() -> void:
+	Game.opening = true
+	var host: Node = self
+	if get_parent() and get_parent().get_parent():
+		host = get_parent().get_parent()
+	story_layer = CanvasLayer.new()
+	story_layer.name = "Opening"
+	story_layer.layer = 40
+	host.add_child(story_layer)
+	story = Control.new()
+	story.name = "Story"
+	story.mouse_filter = Control.MOUSE_FILTER_STOP
+	story.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	story_layer.add_child(story)
+	story.gui_input.connect(_keep_press)
+	var veil := ColorRect.new()
+	veil.color = Color(0.07, 0.09, 0.11, 0.86)
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	story.add_child(veil)
+	story_plate = Panel.new()
+	story_plate.mouse_filter = Control.MOUSE_FILTER_STOP
+	story_plate.add_theme_stylebox_override("panel", _box(Color("2e4048"), Color("e2c56a")))
+	story_plate.gui_input.connect(_keep_press)
+	story.add_child(story_plate)
+	story_page = _story_label(Color("e2c56a"))
+	story_title = _story_label(Color("e2c56a"))
+	story_title.text = "Vanguard Academy"
+	story_body = _story_label(Color("f7f1e4"))
+	story_plate.add_child(story_page)
+	story_plate.add_child(story_title)
+	story_plate.add_child(story_body)
+	story_back = _story_button("Back")
+	story_next = _story_button("Next")
+	story_begin = _story_button("Begin")
+	story.add_child(story_back)
+	story.add_child(story_next)
+	story.add_child(story_begin)
+	story_back.pressed.connect(_story_back)
+	story_next.pressed.connect(_story_next)
+	story_begin.pressed.connect(_story_begin)
+	story.resized.connect(_layout_story)
+	story_index = 0
+	_show_story_page()
+
+func _story_label(color: Color) -> Label:
+	var label := Label.new()
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_constant_override("line_spacing", 12)
+	return label
+
+func _story_button(text: String) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.focus_mode = Control.FOCUS_NONE
+	button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	var fill := Color("2e4048")
+	var edge := Color("e2c56a")
+	button.add_theme_stylebox_override("normal", _box(fill, edge))
+	button.add_theme_stylebox_override("hover", _box(fill.lightened(0.08), edge))
+	button.add_theme_stylebox_override("pressed", _box(fill.darkened(0.08), edge))
+	button.add_theme_color_override("font_color", Color("f7f1e4"))
+	button.add_theme_font_size_override("font_size", 32)
+	return button
+
+func _show_story_page() -> void:
+	if story_body == null:
+		return
+	var last := SCHOOL_STORY.size() - 1
+	story_index = clampi(story_index, 0, last)
+	story_body.text = SCHOOL_STORY[story_index]
+	story_page.text = "%d / %d" % [story_index + 1, SCHOOL_STORY.size()]
+	story_back.visible = story_index > 0
+	story_next.visible = story_index < last
+	story_begin.visible = story_index == last
+	_layout_story()
+
+func _story_back() -> void:
+	if story_index <= 0:
+		return
+	story_index -= 1
+	_show_story_page()
+
+func _story_next() -> void:
+	if story_index >= SCHOOL_STORY.size() - 1:
+		return
+	story_index += 1
+	_show_story_page()
+
+func _story_begin() -> void:
+	if story_index != SCHOOL_STORY.size() - 1:
+		return
+	Game.begin_play()
+	_free_story()
+
+func _free_story() -> void:
+	var layer := story_layer
+	story_layer = null
+	story = null
+	if layer and is_instance_valid(layer):
+		layer.queue_free()
+
+func _layout_story() -> void:
+	if story == null or not is_instance_valid(story) or story_plate == null:
+		return
+	var view := story.size
+	if view.x < 20.0 or view.y < 20.0:
+		view = story.get_viewport_rect().size
+	if view.x < 20.0 or view.y < 20.0:
+		return
+	var margin := _view_margins(view)
+	var left := margin.x
+	var top := margin.y
+	var right := margin.z
+	var bottom := margin.w
+	var short_side := minf(view.x, view.y)
+	var gap := 16.0
+	var btn_h := clampf(short_side * 0.15, 92.0, 128.0)
+	var font := int(clampf(short_side * 0.055, 30, 42))
+	var body_font := int(clampf(short_side * 0.05, 30, 44))
+	var title_font := int(clampf(short_side * 0.07, 36, 56))
+	for button in [story_back, story_next, story_begin]:
+		button.add_theme_font_size_override("font_size", font)
+	var shown: Array[Button] = []
+	if story_back.visible:
+		shown.append(story_back)
+	if story_next.visible:
+		shown.append(story_next)
+	if story_begin.visible:
+		shown.append(story_begin)
+	var stack := shown.size() != 2 or story_begin.visible or view.x < 760.0
+	var rows := shown.size() if stack else 1
+	var block_h := btn_h * float(rows) + gap * float(maxi(rows - 1, 0))
+	var available := view.y - top - bottom
+	if available - block_h - gap < 160.0:
+		btn_h = clampf(available * 0.18, 78.0, btn_h)
+		block_h = btn_h * float(rows) + gap * float(maxi(rows - 1, 0))
+	var plate_h := maxf(120.0, available - block_h - gap)
+	var plate_w := view.x - left - right
+	story_plate.position = Vector2(left, top)
+	story_plate.size = Vector2(plate_w, plate_h)
+	var inner := 28.0
+	story_page.position = Vector2(inner, 20)
+	story_page.size = Vector2(plate_w - inner * 2.0, font + 16)
+	story_page.add_theme_font_size_override("font_size", maxi(26, font - 4))
+	story_title.position = Vector2(inner, story_page.position.y + story_page.size.y + 6.0)
+	story_title.size = Vector2(plate_w - inner * 2.0, title_font * 2.2)
+	story_title.add_theme_font_size_override("font_size", title_font)
+	var body_top := story_title.position.y + story_title.size.y + 8.0
+	story_body.position = Vector2(inner, body_top)
+	story_body.size = Vector2(plate_w - inner * 2.0, maxf(48.0, plate_h - body_top - inner))
+	story_body.add_theme_font_size_override("font_size", body_font)
+	story_body.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var y := top + plate_h + gap
+	if stack:
+		for button in shown:
+			button.position = Vector2(left, y)
+			button.size = Vector2(plate_w, btn_h)
+			y += btn_h + gap
+	elif shown.size() == 2:
+		var half := (plate_w - gap) * 0.5
+		shown[0].position = Vector2(left, y)
+		shown[0].size = Vector2(half, btn_h)
+		shown[1].position = Vector2(left + half + gap, y)
+		shown[1].size = Vector2(half, btn_h)

@@ -149,7 +149,7 @@ func _build() -> void:
 		if kind == Kind.DUELIST:
 			label.text = "Mira\nEven crest" if Game.court_mode != "open" else "Mira\nOpen stand-in"
 		elif kind == Kind.BOSS:
-			label.text = "Wastes Warden"
+			label.text = "Wood Warden"
 		elif kind == Kind.DUMMY:
 			label.text = "Practice post"
 		else:

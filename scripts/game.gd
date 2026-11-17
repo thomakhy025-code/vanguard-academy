@@ -10,6 +10,17 @@ enum Place {
 	CLASSROOM,
 	LIBRARY,
 	GATE,
+	CUT,
+	GUARD,
+	STRENGTH,
+	AGILITY,
+	NEEDLE,
+	ANSWER,
+	SPARK,
+	SPELLCUT,
+	GUARDCAST,
+	LANTERN,
+	INK,
 }
 
 const CHAPTERS := [
@@ -92,9 +103,28 @@ var season_id := -1
 var season_number := 1
 var skip_left := 1
 var intro_seen := false
+var opening := true
 var circuit_flags: Array = []
 var circuit_clears := 0
 var boot_lines: PackedStringArray = PackedStringArray()
+var use_return := false
+var hold_return := false
+var yard_return := Vector3(0, 0.45, 6)
+var anvil_armed := false
+var anvil_count := 0
+var anvil_deadline := 0
+var form := {
+	"cut": 0, "guard": 0, "strength": 0, "agility": 0, "needle": 0, "answer": 0,
+	"spark": 0, "spellcut": 0, "guardcast": 0, "lantern": 0, "ink": 0,
+}
+var trial_best := {
+	"cut": -1.0, "guard": -1.0, "strength": -1.0, "agility": -1.0, "needle": -1.0, "answer": -1.0,
+	"spark": -1.0, "spellcut": -1.0, "guardcast": -1.0, "lantern": -1.0, "ink": -1.0,
+}
+const LANDING_SKILLS: PackedStringArray = [
+	"cut", "guard", "strength", "agility", "needle", "answer",
+	"spark", "spellcut", "guardcast", "lantern", "ink",
+]
 
 signal changed
 signal traveled(id)
@@ -139,30 +169,55 @@ func _boot() -> void:
 		boot_lines.append("The Yard is open. The First Bell is silent. Sword and spell stay together.")
 	_save()
 
+func begin_play() -> void:
+	opening = false
+
 func place_name(id: Place) -> String:
 	match id:
-		Place.YARD: return "Yard"
-		Place.GARDEN: return "Wild Garden"
+		Place.YARD: return "Bell Court"
+		Place.GARDEN: return "School Forest"
 		Place.UNDERCROFT: return "Undercroft"
-		Place.WASTES: return "Training Wastes"
+		Place.WASTES: return "Deep Wood"
 		Place.COURT: return "Dueling Court"
 		Place.HALL: return "Proving Hall"
 		Place.CLASSROOM: return "Classroom"
 		Place.LIBRARY: return "Library"
 		Place.GATE: return "East Gate"
-	return "Yard"
+		Place.CUT: return "Cut Hall"
+		Place.GUARD: return "Guard Hall"
+		Place.STRENGTH: return "Strength Gallery"
+		Place.AGILITY: return "Agility Cloister"
+		Place.NEEDLE: return "Needle Gallery"
+		Place.ANSWER: return "Answer Lane"
+		Place.SPARK: return "Spark Atrium"
+		Place.SPELLCUT: return "Spellcut Bell"
+		Place.GUARDCAST: return "Guardcast Ring"
+		Place.LANTERN: return "Lantern Walk"
+		Place.INK: return "Night Ink"
+	return "Bell Court"
 
 func place_blurb(id: Place) -> String:
 	match id:
-		Place.YARD: return "Upgrade"
-		Place.GARDEN: return "Fight and gather"
-		Place.UNDERCROFT: return "Elites and better ore"
-		Place.WASTES: return "Long hunts and a boss"
-		Place.COURT: return "Even or open duel"
-		Place.HALL: return "Skill course"
-		Place.CLASSROOM: return "Lesson"
-		Place.LIBRARY: return "New weapons"
-		Place.GATE: return "Special event only"
+		Place.YARD: return "Walk the school"
+		Place.GARDEN: return "Practice hunting"
+		Place.UNDERCROFT: return "Cellar elites"
+		Place.WASTES: return "Deeper hunt"
+		Place.COURT: return "Online arena"
+		Place.HALL: return "Ranking stair"
+		Place.CLASSROOM: return "Hen's lesson"
+		Place.LIBRARY: return "Books after stamps"
+		Place.GATE: return "Closed today"
+		Place.CUT: return "Cut the gold post"
+		Place.GUARD: return "Turn the arm"
+		Place.STRENGTH: return "Heavy posts"
+		Place.AGILITY: return "Step the gates"
+		Place.NEEDLE: return "Thread the bells"
+		Place.ANSWER: return "Guard, then reach"
+		Place.SPARK: return "Light the lamps"
+		Place.SPELLCUT: return "Cut while bright"
+		Place.GUARDCAST: return "Burst the ring"
+		Place.LANTERN: return "A wider bolt"
+		Place.INK: return "The echo edge"
 	return ""
 
 func place_swatch(id: Place) -> Array:
@@ -170,8 +225,8 @@ func place_swatch(id: Place) -> Array:
 		Place.YARD: return [Color("85c1e0"), Color("7ec48a")]
 		Place.GARDEN: return [Color("85c1e0"), Color("57af70")]
 		Place.UNDERCROFT: return [Color("6f8ea3"), Color("7d8b96")]
-		Place.WASTES: return [Color("f0b27a"), Color("d2a15a")]
-		Place.COURT: return [Color("6e5848"), Color("8d6a45")]
+		Place.WASTES: return [Color("6f8ea3"), Color("3f9a62")]
+		Place.COURT: return [Color("85c1e0"), Color("57af70")]
 		Place.HALL: return [Color("cbbfa8"), Color("b7aa96")]
 		Place.CLASSROOM: return [Color("d5eef8"), Color("f0e2c4")]
 		Place.LIBRARY: return [Color("e7d3a8"), Color("c8b48a")]
@@ -215,6 +270,304 @@ func spirit_against_monsters(amount: float) -> float:
 func shape_active() -> bool:
 	return not normalized()
 
+func form_tier(skill: String) -> int:
+	return int(form.get(skill, 0))
+
+func skill_for_place(id: int) -> String:
+	match id:
+		Place.CUT: return "cut"
+		Place.GUARD: return "guard"
+		Place.STRENGTH: return "strength"
+		Place.AGILITY: return "agility"
+		Place.NEEDLE: return "needle"
+		Place.ANSWER: return "answer"
+		Place.SPARK: return "spark"
+		Place.SPELLCUT: return "spellcut"
+		Place.GUARDCAST: return "guardcast"
+		Place.LANTERN: return "lantern"
+		Place.INK: return "ink"
+	return ""
+
+func is_trial(id: int) -> bool:
+	return skill_for_place(id) != ""
+
+func landing_count() -> int:
+	return LANDING_SKILLS.size()
+
+func landing_at(index: int) -> Vector3:
+	var blade := index < 6
+	var step := index if blade else index - 6
+	var x := -18.0 if blade else 18.0
+	return Vector3(x, float(step) * 3.2 + 0.2, -6.0)
+
+func landing_name(index: int) -> String:
+	var skill := String(LANDING_SKILLS[index])
+	var wing := "Blade" if index < 6 else "Spark"
+	return "%s · %s" % [wing, skill.capitalize()]
+
+func door_back(id: int) -> Vector3:
+	for i in landing_count():
+		if _room_for_landing(i) == id:
+			return landing_at(i)
+	match id:
+		Place.LIBRARY: return Vector3(0, 0.45, -11)
+		Place.COURT: return Vector3(0, 0.45, 13)
+		Place.GARDEN: return Vector3(-6, 0.45, 17)
+		Place.WASTES: return Vector3(6, 0.45, 17)
+		Place.HALL: return Vector3(-10, 0.45, 9)
+		Place.UNDERCROFT: return Vector3(10, 0.45, 9)
+		Place.CLASSROOM: return landing_at(0) + Vector3(-1.2, 0, 0)
+	return Vector3(0, 0.45, 6)
+
+func _room_for_landing(index: int) -> int:
+	match String(LANDING_SKILLS[index]):
+		"cut": return Place.CUT
+		"guard": return Place.GUARD
+		"strength": return Place.STRENGTH
+		"agility": return Place.AGILITY
+		"needle": return Place.NEEDLE
+		"answer": return Place.ANSWER
+		"spark": return Place.SPARK
+		"spellcut": return Place.SPELLCUT
+		"guardcast": return Place.GUARDCAST
+		"lantern": return Place.LANTERN
+		"ink": return Place.INK
+	return Place.YARD
+
+func remember(at: Vector3) -> void:
+	yard_return = at
+	use_return = true
+
+func open_door(id: int, back: Vector3) -> void:
+	if id == Place.YARD:
+		remember(back)
+		hold_return = true
+		travel(Place.YARD)
+		return
+	if place == Place.YARD:
+		remember(back)
+	hold_return = true
+	travel(id)
+
+func go_landing(index: int) -> void:
+	if index < 0 or index >= landing_count():
+		return
+	remember(landing_at(index))
+	if place == Place.YARD:
+		_move_local(yard_return)
+		toast.emit(landing_name(index))
+		var host := get_tree().current_scene
+		if host and host.has_method("snap_to_student"):
+			host.snap_to_student()
+		return
+	hold_return = true
+	travel(Place.YARD)
+
+func _move_local(at: Vector3) -> void:
+	for node in get_tree().get_nodes_in_group("player"):
+		if node.get_meta("local", false):
+			node.global_position = at
+			node.velocity = Vector3.ZERO
+
+func cut_wait() -> float:
+	if not normalized() and form_tier("cut") >= 3:
+		return 0.34
+	return 0.38
+
+func guard_hold() -> float:
+	var base := 0.58 if bias == "soldier" else 0.42
+	if not normalized() and form_tier("guard") >= 3:
+		return 0.70
+	return base
+
+func spark_wait() -> float:
+	if bias == "caster":
+		return 0.34
+	if not normalized() and form_tier("spark") >= 3:
+		return 0.42
+	return 0.48
+
+func spark_window() -> float:
+	var window := 1.6
+	if bias == "caster":
+		window *= 1.35
+	if not normalized() and form_tier("spellcut") >= 3 and bias != "caster":
+		return 2.0
+	return window
+
+func step_wait() -> float:
+	if not normalized() and form_tier("agility") >= 3:
+		return 0.52
+	return 0.62
+
+func burst_radius() -> float:
+	if not normalized() and form_tier("guardcast") >= 3:
+		return 3.0
+	return 2.55
+
+func answer_time() -> float:
+	if not normalized() and form_tier("answer") >= 3:
+		return 2.6
+	return 2.0
+
+func ink_bonus() -> float:
+	if normalized():
+		return 0.0
+	if form_tier("ink") >= 3:
+		return 0.8
+	return 0.35
+
+func floor_ribbon(at: Vector3) -> String:
+	var skill := ""
+	if place == Place.YARD:
+		var band := int(floor(at.y / 3.2 + 0.2))
+		var index := band if at.x < 0.0 else band + 6
+		if index < 0 or index >= landing_count():
+			return ""
+		skill = String(LANDING_SKILLS[index])
+	else:
+		skill = skill_for_place(place)
+	if skill == "" or form_tier(skill) <= 0:
+		return ""
+	return tier_window(skill).to_html(false)
+
+func tier_window(skill: String) -> Color:
+	var tier := form_tier(skill)
+	if tier >= 3:
+		return Color("ffe08a")
+	if tier >= 2:
+		return Color("e2c56a")
+	if tier >= 1:
+		return Color("efe6d4")
+	if skill == "spark" or skill == "spellcut" or skill == "guardcast" or skill == "lantern":
+		return Color("8ec8f0")
+	if skill == "agility":
+		return Color("57af70")
+	if skill == "strength" or skill == "ink":
+		return Color("c5764b")
+	return Color("cbbe9e")
+
+func trial_allowed(id: int, pattern: int) -> bool:
+	var skill := skill_for_place(id)
+	if skill == "":
+		return false
+	if pattern <= 0:
+		if skill == "lantern":
+			return has_book("lantern") and weapon == "lantern"
+		if skill == "ink":
+			return has_book("ink") and weapon == "ink"
+		return true
+	if skill == "strength" and pattern >= 2:
+		return has_book("hammer")
+	if skill == "agility" and pattern >= 2:
+		return has_book("sparrow")
+	if skill == "needle" and pattern >= 1:
+		return has_book("needle")
+	if skill == "answer" and pattern >= 1:
+		return has_book("answer")
+	if skill == "lantern":
+		return has_book("lantern") and weapon == "lantern"
+	if skill == "ink":
+		return has_book("ink") and weapon == "ink"
+	return true
+
+func trial_block(id: int, pattern: int) -> String:
+	var skill := skill_for_place(id)
+	if skill == "lantern" and (not has_book("lantern") or weapon != "lantern"):
+		return "Read the Lantern Saber, then hold it. The wide lamps stay dark until then."
+	if skill == "ink" and (not has_book("ink") or weapon != "ink"):
+		return "Night Ink stays shut until every stamp is in the handbook, and the dark blade is in hand."
+	if skill == "strength":
+		return "The wide posts wait for the Choir Hammer."
+	if skill == "agility":
+		return "The last gate waits for The Wooden Sparrow."
+	if skill == "needle":
+		return "The far bells wait for the Glass Needle."
+	if skill == "answer":
+		return "The far post waits for Answer."
+	return "That pattern is not open yet."
+
+func pattern_label(id: int, pattern: int) -> String:
+	match skill_for_place(id):
+		"cut": return ["Fan", "Wider fan", "Fast fan"][clampi(pattern, 0, 2)]
+		"guard": return ["Six arms", "Sooner", "Closest"][clampi(pattern, 0, 2)]
+		"strength": return ["Line", "Line again", "Wide"][clampi(pattern, 0, 2)]
+		"agility": return ["Four gates", "Six gates", "Sparrow"][clampi(pattern, 0, 2)]
+		"needle": return ["Near bell", "Far bells", "Thread"][clampi(pattern, 0, 2)]
+		"answer": return ["Near post", "Far post", "Quick reply"][clampi(pattern, 0, 2)]
+		"spark": return ["Still", "Step aside", "Eight lamps"][clampi(pattern, 0, 2)]
+		"spellcut": return ["One bell", "Three bells", "Tight bells"][clampi(pattern, 0, 2)]
+		"guardcast": return ["Ring", "Closer", "Six posts"][clampi(pattern, 0, 2)]
+		"lantern": return ["Wide pair", "Wider", "Three lamps"][clampi(pattern, 0, 2)]
+		"ink": return ["Echo", "Longer echo", "Far echo"][clampi(pattern, 0, 2)]
+	return "Pass"
+
+func note_trial(skill: String, pattern: int, seconds: float) -> void:
+	var previous := float(trial_best.get(skill, -1.0))
+	var fresh := previous < 0.0 or seconds < previous
+	if fresh:
+		trial_best[skill] = seconds
+	if pattern + 1 > form_tier(skill):
+		form[skill] = form_tier(skill) + 1
+	if pattern == 0 and stamps.has(skill) and not bool(stamps[skill]):
+		stamp(skill, true)
+	var rival := _rival_time(skill)
+	var best := float(trial_best[skill])
+	var ahead := "Ahead of the rival." if seconds <= rival else "Rival is at %.1fs." % rival
+	toast.emit("%s  %.1fs. Best %.1fs. %s" % [pattern_label(_place_for_skill(skill), pattern), seconds, best, ahead])
+	changed.emit()
+	_save()
+
+func _place_for_skill(skill: String) -> int:
+	for i in landing_count():
+		if String(LANDING_SKILLS[i]) == skill:
+			return _room_for_landing(i)
+	return Place.YARD
+
+func _rival_time(skill: String) -> float:
+	match skill:
+		"cut": return 9.0
+		"guard": return 8.5
+		"strength": return 6.0
+		"agility": return 7.5
+		"needle": return 5.5
+		"answer": return 7.0
+		"spark": return 8.0
+		"spellcut": return 7.5
+		"guardcast": return 8.0
+		"lantern": return 6.5
+		"ink": return 4.5
+	return 9.0
+
+func arm_anvil() -> void:
+	var ore_need := ore_cost()
+	var shard_need := shard_cost()
+	if ore < ore_need or shards < shard_need:
+		toast.emit("Need %d ore and %d shards. You have %d ore and %d shards." % [ore_need, shard_need, ore, shards])
+		return
+	anvil_armed = true
+	anvil_count = 0
+	anvil_deadline = 0
+	toast.emit("Strike the anvil four times, in a row. A broken rhythm spends nothing.")
+
+func anvil_strike() -> bool:
+	if not anvil_armed or place != Place.YARD:
+		return false
+	var now := Time.get_ticks_msec()
+	if anvil_count > 0 and now > anvil_deadline:
+		anvil_count = 0
+		toast.emit("The rhythm broke. The ore is still yours.")
+	if anvil_count == 0:
+		anvil_deadline = now + 2600
+	anvil_count += 1
+	if anvil_count >= 4:
+		anvil_armed = false
+		anvil_count = 0
+		try_upgrade()
+		return true
+	toast.emit("Anvil %d of 4." % anvil_count)
+	return true
+
 func book_active(id: String) -> bool:
 	return has_book(id) and not normalized()
 
@@ -242,7 +595,7 @@ func weapon_reach() -> float:
 	if not shape_active():
 		return 2.35
 	match weapon:
-		"needle": return 3.15
+		"needle": return 3.40 if form_tier("needle") >= 3 else 3.15
 		"hammer": return 2.0
 		"lantern": return 2.5
 		"ink": return 2.45
@@ -253,7 +606,7 @@ func weapon_arc() -> float:
 		return 0.25
 	match weapon:
 		"needle": return 0.55
-		"hammer": return -0.2
+		"hammer": return -0.35 if form_tier("strength") >= 3 else -0.2
 		_: return 0.25
 
 func owned_weapons() -> Array:
@@ -321,6 +674,9 @@ func travel(id: Place) -> void:
 		toast.emit("Finish the online match before leaving the court.")
 		return
 	court_live = false
+	if not hold_return:
+		use_return = false
+	hold_return = false
 	place = id
 	traveled.emit(id)
 	changed.emit()
@@ -686,7 +1042,7 @@ func circuit_line() -> String:
 		if flag:
 			found += 1
 	var total := circuit_flags.size() if circuit_flags.size() > 0 else 8
-	return "Garden circuit %d/%d. The marked stones are the short visit, a ten-minute walk when you take the fights slowly." % [found, total]
+	return "Forest circuit %d/%d. The marked stones are the short visit, a ten-minute walk when you take the fights slowly." % [found, total]
 
 func begin_circuit() -> void:
 	circuit_flags = []
@@ -705,7 +1061,7 @@ func touch_circuit(index: int) -> void:
 			found += 1
 	if found >= circuit_flags.size():
 		circuit_clears += 1
-		toast.emit("Garden circuit complete. A short visit can end here.")
+		toast.emit("Forest circuit complete. A short visit can end here.")
 		_save()
 	else:
 		toast.emit("Circuit stone %d of %d." % [found, circuit_flags.size()])
@@ -878,6 +1234,8 @@ func _save() -> void:
 		cfg.set_value("p", "stamp_%s" % id, has_stamp(id))
 	for id in books.keys():
 		cfg.set_value("p", "book_%s" % id, has_book(id))
+	cfg.set_value("p", "form", form)
+	cfg.set_value("p", "trial_best", trial_best)
 	cfg.save("user://academy.cfg")
 
 func _load() -> void:
@@ -944,4 +1302,12 @@ func _load() -> void:
 		weapon = "academy"
 	if pose != "raised" and pose != "low":
 		pose = "ready"
+	var stored_form = cfg.get_value("p", "form", {})
+	if stored_form is Dictionary:
+		for key in form.keys():
+			form[key] = int(stored_form.get(key, form[key]))
+	var stored_best = cfg.get_value("p", "trial_best", {})
+	if stored_best is Dictionary:
+		for key in trial_best.keys():
+			trial_best[key] = float(stored_best.get(key, trial_best[key]))
 	_sync_flags()

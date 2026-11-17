@@ -1,0 +1,24 @@
+---
+description: After each game update, publish the web build to GitHub Pages
+alwaysApply: true
+---
+
+# Publish every update
+
+When a change to this game is finished, publish it in the same turn. Do not wait to be asked again.
+
+1. Export the release web build with the existing Web preset. It must stay non-threaded, and it must write `docs/index.html`.
+2. Commit the game change and the new `docs/` build together.
+3. Push `main` to `origin`.
+
+The live site is https://thomakhy025-code.github.io/vanguard-academy/ and Pages serves `main` from `/docs`.
+
+```
+& "C:\Users\User\AppData\Local\Godot\Godot_v4.7.2-stable_win64_console.exe" --headless --path "C:\Users\User\Documents\Unity ai game\Magicandswordupgradegame4" --export-release "Web" "docs/index.html"
+```
+
+- Use a PowerShell here-string for the commit message. Do not change git config, force-push, or skip hooks.
+- Leave out `.godot/`, Unity folders, and anything with secrets.
+- Do not start or leave a server.
+- If the export stops because of the firewall or a missing template, stop and tell the user the exact command and error.
+- Skip the push only when the user says this change should stay local.

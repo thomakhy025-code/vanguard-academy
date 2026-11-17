@@ -16,6 +16,7 @@ var spark := 0.0
 var guard := 0.0
 var riposte := 0.0
 var door_lock := 0.0
+var step_serial := 0
 var near_id := 0
 var camera: Camera3D
 var weapon_root: Node3D
@@ -38,6 +39,7 @@ func setup(follow_camera: Camera3D, is_local: bool) -> void:
 	collision_layer = 2
 	collision_mask = 1
 	floor_snap_length = 0.3
+	floor_max_angle = deg_to_rad(50.0)
 	_build_body()
 	if is_local:
 		Game.changed.connect(refresh_weapon)
@@ -212,11 +214,14 @@ func _apply_glow() -> void:
 func _apply_ribbon() -> void:
 	if ribbon_mesh == null or ribbon_mat == null:
 		return
-	if Game.ribbon == "":
+	var color_name := Game.ribbon
+	if color_name == "":
+		color_name = Game.floor_ribbon(global_position)
+	if color_name == "":
 		ribbon_mesh.visible = false
 		return
 	ribbon_mesh.visible = true
-	var color := Color(Game.ribbon)
+	var color := Color(color_name)
 	ribbon_mat.albedo_color = color
 	ribbon_mat.emission = color
 
@@ -240,7 +245,7 @@ func _physics_process(delta: float) -> void:
 	if swing > 0.0:
 		swing = maxf(swing - delta, 0.0)
 		if swing == 0.0:
-			guard = 0.58 if Game.bias == "soldier" else 0.42
+			guard = Game.guard_hold()
 	elif guard > 0.0:
 		guard = maxf(guard - delta, 0.0)
 	if weapon_root:
@@ -259,25 +264,28 @@ func _physics_process(delta: float) -> void:
 			rotation.y = lerp_angle(rotation.y, net_yaw, 1.0 - exp(-14.0 * delta))
 		return
 	_steer(delta)
-	_collect_nodes("ore")
-	_collect_nodes("shard")
-	_touch_places()
-	_touch_circuit()
-	if Input.is_action_just_pressed("cut"):
-		cut()
-	if Input.is_action_just_pressed("spark"):
-		cast_spark()
-	if Input.is_action_just_pressed("step"):
-		step_aside()
+	if not Game.opening:
+		_collect_nodes("ore")
+		_collect_nodes("shard")
+		_touch_places()
+		_touch_circuit()
+		if Input.is_action_just_pressed("cut"):
+			cut()
+		if Input.is_action_just_pressed("spark"):
+			cast_spark()
+		if Input.is_action_just_pressed("step"):
+			step_aside()
 	if Online.active:
 		var link := get_node_or_null("/root/Main/Net")
 		if link:
 			link.broadcast_state(global_position, rotation.y, hp)
 
 func _steer(delta: float) -> void:
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	if Game.stick.length() > 0.12:
-		input = Game.stick
+	var input := Vector2.ZERO
+	if not Game.opening:
+		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+		if Game.stick.length() > 0.12:
+			input = Game.stick
 	var direction := Vector3.ZERO
 	if camera and input.length() > 0.05:
 		var basis := camera.global_transform.basis
@@ -299,24 +307,29 @@ func _steer(delta: float) -> void:
 	move_and_slide()
 
 func cut() -> void:
-	if sword_cd > 0.0:
+	if Game.opening or sword_cd > 0.0:
 		return
-	sword_cd = 0.38
+	sword_cd = Game.cut_wait()
 	swing = 0.22
 	var reach := 2.35
 	var arc := 0.25
+	var reply := false
 	if Game.shape_active():
 		reach = Game.weapon_reach()
 		arc = Game.weapon_arc()
 	if riposte > 0.0 and Game.book_active("answer"):
 		reach += 0.6
 		riposte = 0.0
+		reply = true
 	var amount := Game.outgoing(true)
-	var kind := "sword"
-	if Game.spellcut and spark > 0.0:
+	var kind := "answer" if reply else "sword"
+	if Game.spellcut and spark > 0.0 and not reply:
 		amount *= 1.65
 		spark = 0.0
 		kind = "empower"
+	elif Game.spellcut and spark > 0.0:
+		amount *= 1.65
+		spark = 0.0
 	_strike(reach, amount, kind, arc)
 	if Game.book_active("ink") and Game.weapon == "ink":
 		_ink_follow(reach, arc)
@@ -324,18 +337,18 @@ func cut() -> void:
 func _ink_follow(reach: float, arc: float) -> void:
 	await get_tree().create_timer(0.16).timeout
 	if is_inside_tree():
-		_strike(reach, Game.outgoing(false), "ink", arc)
+		_strike(reach + Game.ink_bonus(), Game.outgoing(false), "ink", arc)
 
 func cast_spark() -> void:
-	if spell_cd > 0.0:
+	if Game.opening or spell_cd > 0.0:
 		return
 	if guard > 0.0:
 		_guardcast()
 		return
-	spell_cd = 0.34 if Game.bias == "caster" else 0.48
-	spark = 1.6 if Game.spellcut else 0.0
+	spark = Game.spark_window() if Game.spellcut else 0.0
 	if Game.bias == "caster" and spark > 0.0:
-		spark *= 1.35
+		spark = Game.spark_window()
+	spell_cd = Game.spark_wait()
 	var bolt := Node3D.new()
 	bolt.set_script(load("res://scripts/bolt.gd"))
 	get_tree().current_scene.get_node("FX").add_child(bolt)
@@ -355,13 +368,18 @@ func _guardcast() -> void:
 	var origin := global_position
 	_burst_visual()
 	for node in get_tree().get_nodes_in_group("foe"):
-		if origin.distance_to(node.global_position) > 2.55:
+		if origin.distance_to(node.global_position) > Game.burst_radius():
 			continue
 		var hit := amount
 		var foe_kind = node.kind
 		if foe_kind == Foe.Kind.BEAST or foe_kind == Foe.Kind.ELITE or foe_kind == Foe.Kind.BOSS or foe_kind == Foe.Kind.SPIRIT:
 			hit = Game.spirit_against_monsters(amount)
 		node.take_hit(hit, "guardcast")
+	for node in get_tree().get_nodes_in_group("mark"):
+		if origin.distance_to(node.global_position) > Game.burst_radius():
+			continue
+		if node.has_method("take_hit"):
+			node.take_hit(amount, "guardcast")
 	if Online.active:
 		var link := get_node_or_null("/root/Main/Net")
 		if link:
@@ -396,9 +414,10 @@ func _burst_visual() -> void:
 	fade.finished.connect(mesh.queue_free)
 
 func step_aside() -> void:
-	if dodge_cd > 0.0:
+	if Game.opening or dodge_cd > 0.0:
 		return
-	dodge_cd = 0.62
+	dodge_cd = Game.step_wait()
+	step_serial += 1
 	iframes = 0.38
 	var hop := -global_transform.basis.z
 	hop.y = 0
@@ -415,6 +434,12 @@ func _strike(reach: float, amount: float, kind: String, arc := 0.25) -> void:
 	for node in get_tree().get_nodes_in_group("foe"):
 		if _faces(node.global_position, forward, reach, arc):
 			node.take_hit(amount, kind)
+	for node in get_tree().get_nodes_in_group("mark"):
+		if _faces(node.global_position, forward, reach, arc) and node.has_method("take_hit"):
+			node.take_hit(amount, kind)
+	for node in get_tree().get_nodes_in_group("anvil"):
+		if _faces(node.global_position, forward, reach, arc):
+			Game.anvil_strike()
 	if Online.active:
 		var link := get_node_or_null("/root/Main/Net")
 		if link:
@@ -438,7 +463,7 @@ func hurt(amount: float) -> void:
 		amount *= 0.3
 		Game.note_guard()
 		if Game.book_active("answer"):
-			riposte = 2.0
+			riposte = Game.answer_time()
 	hp = maxf(hp - amount, 0.0)
 	iframes = 0.18
 	if hp <= 0.0:
@@ -475,18 +500,19 @@ func _touch_places() -> void:
 	var arg = ""
 	var nid := 0
 	if Game.place == Game.Place.YARD:
-		for door in get_tree().get_nodes_in_group("door"):
-			if _near(door, 1.7):
-				action = "door"
-				arg = door.get_meta("to")
-				nid = door.get_instance_id()
+		for forge_node in get_tree().get_nodes_in_group("forge"):
+			if _near(forge_node, 2.1):
+				action = "forge"
+				nid = forge_node.get_instance_id()
 				break
-		if action == "":
-			for forge_node in get_tree().get_nodes_in_group("forge"):
-				if _near(forge_node, 2.1):
-					action = "forge"
-					nid = forge_node.get_instance_id()
-					break
+	for door in get_tree().get_nodes_in_group("door"):
+		if action != "":
+			break
+		if _near(door, 1.7):
+			action = "door"
+			arg = [door.get_meta("to"), door.get_meta("back", Vector3(0, 0.45, 6))]
+			nid = door.get_instance_id()
+			break
 	if action == "" and Game.place == Game.Place.COURT:
 		for ring in get_tree().get_nodes_in_group("duel"):
 			if _near(ring, 2.2):
@@ -526,7 +552,9 @@ func _touch_places() -> void:
 func _do_touch(action: String, arg) -> void:
 	match action:
 		"door":
-			Game.travel(int(arg))
+			var place_id := int(arg[0]) if arg is Array else int(arg)
+			var back: Vector3 = arg[1] if arg is Array else Vector3(0, 0.45, 6)
+			Game.open_door(place_id, back)
 		"forge":
 			Game.ask_forge.emit()
 		"ring":

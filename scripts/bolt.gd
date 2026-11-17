@@ -10,7 +10,7 @@ func _ready() -> void:
 	var radius := 0.22
 	if Game.shape_active() and Game.weapon == "lantern":
 		radius = 0.34
-		hit_radius = 1.7
+		hit_radius = 2.15 if Game.form_tier("lantern") >= 3 else 1.7
 	var mesh := MeshInstance3D.new()
 	var ball := SphereMesh.new()
 	ball.radius = radius
@@ -45,6 +45,11 @@ func _physics_process(delta: float) -> void:
 			if foe_kind == Foe.Kind.BEAST or foe_kind == Foe.Kind.ELITE or foe_kind == Foe.Kind.BOSS or foe_kind == Foe.Kind.SPIRIT:
 				hit = Game.spirit_against_monsters(amount)
 			node.take_hit(hit, "spell")
+			queue_free()
+			return
+	for node in get_tree().get_nodes_in_group("mark"):
+		if node.global_position.distance_to(global_position) < hit_radius and node.has_method("take_hit"):
+			node.take_hit(amount, "spell")
 			queue_free()
 			return
 	if Online.active:
