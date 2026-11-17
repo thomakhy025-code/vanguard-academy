@@ -21,6 +21,7 @@ enum Place {
 	GUARDCAST,
 	LANTERN,
 	INK,
+	OUTSIDE,
 }
 
 const CHAPTERS := [
@@ -48,7 +49,7 @@ const HALL_BLURBS := [
 	"Four constructs. A longer run for a long visit.",
 ]
 
-var place: Place = Place.YARD
+var place: Place = Place.OUTSIDE
 var hunt_rank := 1
 var ore := 0
 var shards := 0
@@ -110,6 +111,8 @@ var boot_lines: PackedStringArray = PackedStringArray()
 var use_return := false
 var hold_return := false
 var yard_return := Vector3(0, 0.45, 6)
+var arrive := Vector3(0, 2.4, 8)
+var use_arrive := false
 var anvil_armed := false
 var anvil_count := 0
 var anvil_deadline := 0
@@ -174,7 +177,8 @@ func begin_play() -> void:
 
 func place_name(id: Place) -> String:
 	match id:
-		Place.YARD: return "Bell Court"
+		Place.YARD: return "Inside the school"
+		Place.OUTSIDE: return "Outside the school"
 		Place.GARDEN: return "School Forest"
 		Place.UNDERCROFT: return "Undercroft"
 		Place.WASTES: return "Deep Wood"
@@ -198,7 +202,8 @@ func place_name(id: Place) -> String:
 
 func place_blurb(id: Place) -> String:
 	match id:
-		Place.YARD: return "Walk the school"
+		Place.YARD: return "Courtyard, towers, and lessons"
+		Place.OUTSIDE: return "The grounds beyond the door"
 		Place.GARDEN: return "Practice hunting"
 		Place.UNDERCROFT: return "Cellar elites"
 		Place.WASTES: return "Deeper hunt"
@@ -222,7 +227,8 @@ func place_blurb(id: Place) -> String:
 
 func place_swatch(id: Place) -> Array:
 	match id:
-		Place.YARD: return [Color("85c1e0"), Color("7ec48a")]
+		Place.YARD: return [Color("85c1e0"), Color("efe6d4")]
+		Place.OUTSIDE: return [Color("85c1e0"), Color("57af70")]
 		Place.GARDEN: return [Color("85c1e0"), Color("57af70")]
 		Place.UNDERCROFT: return [Color("6f8ea3"), Color("7d8b96")]
 		Place.WASTES: return [Color("6f8ea3"), Color("3f9a62")]
@@ -665,6 +671,14 @@ func grant_loot(ore_n: int, shard_n: int) -> void:
 		parts.append("Shards +%d" % shard_n)
 	if parts.size() > 0:
 		toast.emit(" ".join(parts))
+
+func enter_place(id: int, at: Vector3) -> void:
+	if is_locked(id) or (Online.active and id != Place.COURT):
+		travel(id)
+		return
+	arrive = at
+	use_arrive = true
+	travel(id)
 
 func travel(id: Place) -> void:
 	if is_locked(id):

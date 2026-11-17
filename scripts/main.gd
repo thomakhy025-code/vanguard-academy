@@ -13,6 +13,8 @@ var hall_running := false
 var hall_time := 0.0
 var hall_token := 0
 var stood_floor := -999
+var cam_yaw := 0.0
+var cam_pitch := 0.42
 var trial_on := false
 var trial_cursor := 0
 var trial_need := 0
@@ -84,11 +86,19 @@ func _world() -> void:
 	add_child(net)
 
 func _snap_camera() -> void:
+	_follow_camera()
+
+func _follow_camera() -> void:
+	# The character stays in the middle. Moving does not turn this view. Only a drag on empty screen does.
 	if student == null or camera == null:
 		return
-	var behind: Vector3 = student.global_transform.basis.z
-	camera.global_position = student.global_position + Vector3.UP * 5.6 + behind * 8.0
-	camera.look_at(student.global_position + Vector3.UP * 1.25)
+	var pivot: Vector3 = student.global_position + Vector3.UP * 1.2
+	var flat := cos(cam_pitch) * 8.0
+	var lift := sin(cam_pitch) * 8.0
+	var behind := Vector3(sin(cam_yaw), 0.0, cos(cam_yaw))
+	camera.global_position = pivot + Vector3.UP * lift + behind * flat
+	if camera.global_position.distance_squared_to(pivot) > 0.01:
+		camera.look_at(pivot)
 
 func _spark_wipe() -> void:
 	var layer := CanvasLayer.new()
@@ -116,11 +126,12 @@ func _spark_wipe() -> void:
 func _process(delta: float) -> void:
 	if hall_running:
 		hall_time += delta
+	if student:
+		_follow_camera()
 	if Game.place == Game.Place.YARD and student:
 		var band := int(floor(student.global_position.y / 3.2 + 0.2))
 		if band != stood_floor:
 			stood_floor = band
-			_snap_camera()
 			if student.has_method("_apply_ribbon"):
 				student._apply_ribbon()
 	if trial_on:
@@ -131,33 +142,12 @@ func _process(delta: float) -> void:
 			_gate_pass()
 
 func pan_camera(screen_delta: Vector2) -> void:
-	# Dragging moves this camera across the ground. Right follows the finger. Up moves flattened forward.
+	# Dragging empty screen looks around the character. It does not happen because they walked.
 	if camera == null or screen_delta == Vector2.ZERO:
 		return
-	var right := camera.global_transform.basis.x
-	right.y = 0.0
-	if right.length_squared() < 0.000001:
-		return
-	right = right.normalized()
-	var ahead := -camera.global_transform.basis.z
-	ahead.y = 0.0
-	if ahead.length_squared() < 0.000001:
-		return
-	ahead = ahead.normalized()
-	var height := camera.global_position.y
-	camera.global_position += (right * screen_delta.x + ahead * -screen_delta.y) * _pan_units()
-	camera.global_position.y = height
-
-func _pan_units() -> float:
-	var view_h := get_viewport().get_visible_rect().size.y
-	if view_h < 1.0:
-		view_h = 720.0
-	var look := -camera.global_transform.basis.z
-	var reach := 12.0
-	if look.y < -0.08:
-		reach = camera.global_position.y / -look.y
-	reach = clampf(reach, 6.0, 30.0)
-	return (2.0 * reach * tan(deg_to_rad(camera.fov * 0.5))) / view_h
+	cam_yaw -= screen_delta.x * 0.005
+	cam_pitch = clampf(cam_pitch + screen_delta.y * 0.003, 0.2, 1.05)
+	_follow_camera()
 
 func rebuild(id: int) -> void:
 	hall_running = false
@@ -169,6 +159,8 @@ func rebuild(id: int) -> void:
 	match id:
 		Game.Place.YARD:
 			_build_yard()
+		Game.Place.OUTSIDE:
+			_build_outside()
 		Game.Place.GARDEN:
 			_build_garden()
 		Game.Place.UNDERCROFT:
@@ -188,7 +180,10 @@ func rebuild(id: int) -> void:
 	trial_on = false
 	trial_pattern = int(pattern_pick.get(Game.skill_for_place(id), 0))
 	if student:
-		if id == Game.Place.YARD and Game.use_return:
+		if Game.use_arrive:
+			student.global_position = Game.arrive
+			Game.use_arrive = false
+		elif id == Game.Place.YARD and Game.use_return:
 			student.global_position = Game.yard_return
 		else:
 			student.global_position = Vector3(0, 2.4, 8)
@@ -261,6 +256,7 @@ func _build_yard() -> void:
 	_ring_if_needed(bell)
 	_build_towers()
 	_school_doors()
+	_school_gate()
 	_east_gate(Vector3(22, 0, -8))
 
 func _path_cross() -> void:
@@ -321,6 +317,42 @@ func _arena_shell() -> void:
 	_box_at(Vector3(-7, 1.3, 21), Vector3(6.0, 2.6, 2.4), Color("efe6d4"), 0.0, true)
 	_box_at(Vector3(7, 1.3, 21), Vector3(6.0, 2.6, 2.4), Color("efe6d4"), 0.0, true)
 	_box_at(Vector3(0, 2.6, 22.2), Vector3(8.0, 0.4, 2.4), Color("c5764b"), 0.0, true)
+
+func _build_outside() -> void:
+	_ground(Color("57af70"), 46.0)
+	for i in range(-2, 10):
+		_box_at(Vector3(0, 0.08, float(i) * 1.5), Vector3(2.6, 0.08, 1.35), Color("cbbe9e"), 0.0, false)
+	_box_at(Vector3(-4.4, 2.3, -1.4), Vector3(5.4, 4.6, 1.5), Color("efe6d4"), 0.0, true)
+	_box_at(Vector3(4.4, 2.3, -1.4), Vector3(5.4, 4.6, 1.5), Color("efe6d4"), 0.0, true)
+	_box_at(Vector3(0, 4.8, -1.4), Vector3(3.4, 0.8, 1.5), Color("efe6d4"), 0.0, true)
+	_cylinder_mesh(Vector3(0, 6.4, -1.4), 0.35, 6.8, 2.4, Color("c5764b"), 0.0)
+	_box_at(Vector3(-1.7, 2.5, -0.55), Vector3(0.85, 1.15, 0.12), Color("e2c56a"), 0.4, false)
+	_box_at(Vector3(1.7, 2.5, -0.55), Vector3(0.85, 1.15, 0.12), Color("e2c56a"), 0.4, false)
+	_sign(Vector3(0, 3.6, 2.4), "School", 56)
+	_prompt_door(Vector3(0, 0, 1.5), "Enter the school", Game.Place.YARD, Vector3(-16, 0.45, 5.0))
+	for i in 8:
+		var angle := TAU * float(i) / 8.0
+		_tree(Vector3(sin(angle) * 16.0, 0, 10.0 + cos(angle) * 8.0), 3.1)
+
+func _school_gate() -> void:
+	_box_at(Vector3(-19.2, 1.8, 8), Vector3(1.2, 3.6, 5.4), Color("efe6d4"), 0.0, true)
+	_box_at(Vector3(-12.8, 1.8, 8), Vector3(1.2, 3.6, 5.4), Color("efe6d4"), 0.0, true)
+	_box_at(Vector3(-16, 3.7, 8), Vector3(6.4, 0.7, 5.4), Color("c5764b"), 0.0, true)
+	_sign(Vector3(-16, 3.2, 11.2), "School door", 40)
+	_prompt_door(Vector3(-16, 0, 10.6), "Leave the school", Game.Place.OUTSIDE, Vector3(0, 0.45, 4.4))
+
+func _prompt_door(at: Vector3, button: String, place_id: int, arrive_at: Vector3) -> void:
+	_box_at(at + Vector3(1.15, 1.35, 0), Vector3(0.4, 2.7, 0.4), Color("efe6d4"), 0.0, true)
+	_box_at(at + Vector3(-1.15, 1.35, 0), Vector3(0.4, 2.7, 0.4), Color("efe6d4"), 0.0, true)
+	_box_at(at + Vector3(0, 2.55, 0), Vector3(2.6, 0.35, 0.4), Color("e2c56a"), 0.2, true)
+	var mark := Marker3D.new()
+	mark.position = at
+	mark.set_meta("prompt", true)
+	mark.set_meta("label", button)
+	mark.set_meta("to", place_id)
+	mark.set_meta("arrive", arrive_at)
+	mark.add_to_group("door")
+	stage.add_child(mark)
 
 func _portal(at: Vector3, label: String, place_id: int, back: Vector3) -> void:
 	_box_at(at + Vector3(1.15, 1.35, 0), Vector3(0.4, 2.7, 0.4), Color("efe6d4"), 0.0, true)

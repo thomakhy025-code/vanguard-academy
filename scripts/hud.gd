@@ -252,6 +252,9 @@ func _refresh() -> void:
 	banner_back.visible = banner != ""
 
 func _action_label() -> String:
+	var pupil := _local_student()
+	if pupil != null and str(pupil.get("door_prompt")) != "":
+		return str(pupil.get("door_prompt"))
 	if Game.is_trial(Game.place):
 		var pattern := 0
 		var host := get_tree().current_scene
@@ -302,6 +305,11 @@ func _equip(id: String) -> void:
 	_close_sheet()
 
 func _open_action() -> void:
+	var pupil := _local_student()
+	if pupil != null and str(pupil.get("door_prompt")) != "":
+		var spot: Vector3 = pupil.get("prompt_arrive")
+		Game.enter_place(int(pupil.get("prompt_to")), spot)
+		return
 	if Game.is_trial(Game.place):
 		var host := get_tree().current_scene
 		if host != null and host.has_method("begin_shown_trial"):
@@ -474,7 +482,7 @@ func _open_places() -> void:
 	for i in Game.landing_count():
 		_add_landing_card(box, i)
 	for id in [
-		Game.Place.YARD, Game.Place.GARDEN, Game.Place.UNDERCROFT, Game.Place.WASTES,
+		Game.Place.OUTSIDE, Game.Place.YARD, Game.Place.GARDEN, Game.Place.UNDERCROFT, Game.Place.WASTES,
 		Game.Place.COURT, Game.Place.HALL, Game.Place.CLASSROOM, Game.Place.LIBRARY, Game.Place.GATE,
 	]:
 		_add_place_card(box, id)

@@ -16,6 +16,9 @@ var spark := 0.0
 var guard := 0.0
 var riposte := 0.0
 var door_lock := 0.0
+var door_prompt := ""
+var prompt_to := 0
+var prompt_arrive := Vector3.ZERO
 var step_serial := 0
 var near_id := 0
 var camera: Camera3D
@@ -494,6 +497,7 @@ func _restore_node(node: Node) -> void:
 		node.visible = true
 
 func _touch_places() -> void:
+	door_prompt = ""
 	if door_lock > 0.0:
 		return
 	var action := ""
@@ -508,7 +512,13 @@ func _touch_places() -> void:
 	for door in get_tree().get_nodes_in_group("door"):
 		if action != "":
 			break
-		if _near(door, 1.7):
+		if _near(door, 2.3):
+			if bool(door.get_meta("prompt", false)):
+				door_prompt = str(door.get_meta("label", "Enter the school"))
+				prompt_to = int(door.get_meta("to"))
+				var spot: Vector3 = door.get_meta("arrive", Vector3(0, 0.45, 6))
+				prompt_arrive = spot
+				continue
 			action = "door"
 			arg = [door.get_meta("to"), door.get_meta("back", Vector3(0, 0.45, 6))]
 			nid = door.get_instance_id()
